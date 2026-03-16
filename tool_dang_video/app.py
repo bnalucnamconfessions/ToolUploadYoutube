@@ -12,8 +12,8 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 import tooldangvideo
 
-# URL file thông báo từ xa (GitHub Raw hoặc Gist). Để trống = tắt. VD: https://raw.githubusercontent.com/user/repo/main/notice.json
-NOTICE_JSON_URL = os.environ.get("NOTICE_JSON_URL", "")
+# URL file thông báo từ xa (GitHub Raw hoặc Gist).
+NOTICE_JSON_URL = "https://raw.githubusercontent.com/bnalucnamconfessions/ToolUploadYoutube/main/notice.json"
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
