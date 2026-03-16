@@ -8,12 +8,18 @@ import queue
 import json
 import shutil
 import urllib.request
+import urllib.error
 from datetime import datetime
 from werkzeug.utils import secure_filename
 import tooldangvideo
 
 # URL file thông báo từ xa (GitHub Raw hoặc Gist).
 NOTICE_JSON_URL = "https://raw.githubusercontent.com/bnalucnamconfessions/ToolUploadYoutube/main/notice.json"
+
+# Khi chạy từ file .exe (PyInstaller), đặt thư mục làm việc = thư mục chứa exe
+# để chrome_youtube_profiles, file Excel, temp nằm cạnh exe.
+if getattr(sys, "frozen", False):
+    os.chdir(os.path.dirname(sys.executable))
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -104,6 +110,7 @@ def _list_accounts():
                 "id": account_id,
                 "label": label,
                 "has_credentials": has_credentials,
+                "email": email,
                 "email_masked": _mask_email(email) if email else ""
             })
     return accounts
@@ -304,21 +311,47 @@ def run_upload():
         log_callback(traceback.format_exc())
         upload_status['is_running'] = False
 
-@app.route('/api/notice', methods=['GET'])
-def api_notice():
-    """Lấy thông báo từ xa (GitHub Raw / Gist). Trả về JSON { success, notice: { version, title, message, link } }."""
-    if not (NOTICE_JSON_URL and NOTICE_JSON_URL.strip()):
-        return jsonify({"success": False, "notice": None})
+def _fetch_notice_json(url):
+    """Tải và parse JSON từ url. Trả về (data, None) nếu OK, (None, error_string) nếu lỗi."""
     try:
         req = urllib.request.Request(
-            NOTICE_JSON_URL.strip(),
-            headers={"User-Agent": "YouTubeUploadTool/1.0"},
+            url,
+            headers={"User-Agent": "YouTubeUploadTool/1.0", "Cache-Control": "no-cache"},
         )
         with urllib.request.urlopen(req, timeout=6) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        return jsonify({"success": True, "notice": data})
-    except Exception:
+        return (data, None)
+    except urllib.error.HTTPError as e:
+        return (None, str(e))
+    except Exception as e:
+        return (None, str(e))
+
+
+@app.route('/api/notice', methods=['GET'])
+def api_notice():
+    """Lấy thông báo từ xa (GitHub Raw / Gist). Trả về JSON { success, notice }."""
+    if not (NOTICE_JSON_URL and NOTICE_JSON_URL.strip()):
         return jsonify({"success": False, "notice": None})
+    base_url = NOTICE_JSON_URL.strip()
+    bust = str(int(time.time() * 1000))
+    url = (base_url + ("&" if "?" in base_url else "?") + "_=" + bust)
+
+    data, err = _fetch_notice_json(url)
+    # Nếu 404, thử đường dẫn trong thư mục tool_dang_video (repo có thể để notice.json trong subfolder)
+    if data is None and err and "404" in err:
+        if "/notice.json" in base_url and "tool_dang_video" not in base_url:
+            alt_base = base_url.replace("/notice.json", "/tool_dang_video/notice.json")
+            alt_url = (alt_base + ("&" if "?" in alt_base else "?") + "_=" + bust)
+            data, err = _fetch_notice_json(alt_url)
+    if data is None:
+        print("[api/notice] Lỗi:", err, file=sys.stderr)
+        return jsonify({"success": False, "notice": None, "error": err or "Unknown"})
+
+    response = jsonify({"success": True, "notice": data})
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.route('/')
@@ -369,6 +402,27 @@ def api_rename_account():
         meta[str(account_id)] = meta.get(str(account_id), {})
         meta[str(account_id)]["label"] = label
         _save_profiles_meta(meta)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/accounts/delete', methods=['POST'])
+def api_delete_account():
+    """Xóa tài khoản (profile Chrome): xóa thư mục profile và mục trong meta."""
+    try:
+        data = request.json or {}
+        account_id = data.get("account_id")
+        if account_id is None:
+            return jsonify({"success": False, "error": "Thiếu account_id"}), 400
+        account_id = int(account_id)
+        pdir = _profile_dir_for_account(account_id)
+        if not os.path.isdir(pdir):
+            return jsonify({"success": False, "error": "Tài khoản không tồn tại"}), 404
+        meta = _load_profiles_meta()
+        meta.pop(str(account_id), None)
+        _save_profiles_meta(meta)
+        shutil.rmtree(pdir, ignore_errors=True)
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

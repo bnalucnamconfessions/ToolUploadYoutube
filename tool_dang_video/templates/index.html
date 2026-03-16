@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎬 YouTube Upload Tool</title>
+    <title>YouTube Upload Tool</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -12,8 +12,8 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1><i class="fas fa-video"></i> YouTube Upload Tool</h1>
-                <p class="subtitle">Upload video lên YouTube tự động</p>
+                <h1>YouTube Upload Tool</h1>
+                <p class="subtitle">Công cụ tải video lên YouTube tự động</p>
             </div>
         </header>
 
@@ -32,69 +32,60 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Support & Guide Card -->
-            <div class="card support-card">
-                <div class="card-header support-header">
-                    <h2><i class="fas fa-heart"></i> Hỗ trợ dự án & Hướng dẫn</h2>
+            <!-- Hướng dẫn -->
+            <div class="card guide-card">
+                <div class="card-header card-header--muted">
+                    <h2>Hướng dẫn sử dụng</h2>
                 </div>
-                <div class="card-body support-body">
-                    <div class="support-guide-container">
-                        <!-- Hỗ trợ dự án -->
-                        <div class="support-section">
-                            <h3 class="section-title"><i class="fas fa-heart"></i> Hỗ trợ dự án</h3>
-                            <div class="support-content">
-                                <div class="support-message">
-                                    <p class="greeting">👋 Em Thanh Bình - Xiêu đẹp troai xin chào anh, chị, em và các bạn!</p>
-                                    <p class="quote">💭 Với châm ngôn <strong>"tôi lười và bạn cũng vậy"</strong>. Nên em đã ngồi vắt óc vai cốt đing tạo ra bản V2.0</p>
-                                    <p class="message">✨ Vào một ngày đẹp trời nào đó khi mọi người chạy cái này mà thấy cái mã QR cụa em cũng rấc đẹp, cũng có thể tinh tinh vào dự án <strong>NUÔI EMS</strong> - nâng tầm bữa trưa "trứng, chúc chích".</p>
-                                    <p class="message">🚀 Đồng thời cũng có thể giúp em có động lực ra bản V3.0 xin xò con bò hơn thì xeooo. hẹ hẹ</p>
-                                </div>
-                                <div class="qr-container">
-                                    <img src="{{ url_for('static', filename='xintien.jpg') }}" alt="QR Code hỗ trợ" class="qr-code">
-                                    <p class="qr-note">💝 Cảm ơn sự ủng hộ của mọi người!</p>
-                                </div>
-                            </div>
+                <div class="card-body guide-card-body">
+                    <div class="guide-steps">
+                        <div class="guide-step-item">
+                            <span class="guide-step-num">1</span>
+                            <div class="guide-step-text"><strong>Chọn folder</strong> chứa video (mp4, mov, mkv, …) qua nút "Chọn Folder".</div>
                         </div>
+                        <div class="guide-step-item">
+                            <span class="guide-step-num">2</span>
+                            <div class="guide-step-text"><strong>Cấu hình:</strong> tiêu đề (tùy chọn), Made for kids, Visibility, tên file Excel.</div>
+                        </div>
+                        <div class="guide-step-item">
+                            <span class="guide-step-num">3</span>
+                            <div class="guide-step-text"><strong>Bắt đầu Upload</strong> → chọn tài khoản (profile Chrome). Lần đầu có thể đăng nhập YouTube trong cửa sổ do tool mở.</div>
+                        </div>
+                        <div class="guide-step-item">
+                            <span class="guide-step-num">4</span>
+                            <div class="guide-step-text"><strong>Theo dõi</strong> tiến trình; file Excel được cập nhật realtime sau mỗi video.</div>
+                        </div>
+                        <div class="guide-step-item">
+                            <span class="guide-step-num">5</span>
+                            <div class="guide-step-text"><strong>Tải Excel</strong> khi cần để lấy danh sách link và trạng thái.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                        <!-- Hướng dẫn sử dụng -->
-                        <div class="guide-section">
-                            <h3 class="section-title"><i class="fas fa-book"></i> Hướng dẫn sử dụng</h3>
-                            <div class="guide-content">
-                                <div class="guide-step">
-                                    <div class="step-number">1</div>
-                                    <div class="step-content">
-                                        <h4>Chọn folder chứa video</h4>
-                                        <p>Nhấn "Chọn Folder" và chọn thư mục chứa file video (mp4, mov, mkv, …) cần upload lên YouTube.</p>
-                                    </div>
-                                </div>
-                                <div class="guide-step">
-                                    <div class="step-number">2</div>
-                                    <div class="step-content">
-                                        <h4>Cấu hình upload</h4>
-                                        <p>Điền tiêu đề video (hoặc để trống), chọn <strong>Made for kids</strong> (Có/Không), <strong>Visibility</strong> (Riêng tư / Không công khai / Công khai) và tên file Excel để lưu link + trạng thái.</p>
-                                    </div>
-                                </div>
-                                <div class="guide-step">
-                                    <div class="step-number">3</div>
-                                    <div class="step-content">
-                                        <h4>Bắt đầu upload và chọn tài khoản</h4>
-                                        <p>Nhấn "Bắt đầu Upload" → chuyển sang trang chọn tài khoản (profile Chrome). Chọn profile để dùng; lần đầu có thể cần đăng nhập YouTube trong cửa sổ Chrome do tool mở.</p>
-                                    </div>
-                                </div>
-                                <div class="guide-step">
-                                    <div class="step-number">4</div>
-                                    <div class="step-content">
-                                        <h4>Theo dõi tiến trình</h4>
-                                        <p>Xem trạng thái upload, số thành công/thất bại và log chi tiết. File Excel được cập nhật <strong>realtime</strong> sau mỗi video (link + trạng thái), không cần đợi hết batch.</p>
-                                    </div>
-                                </div>
-                                <div class="guide-step">
-                                    <div class="step-number">5</div>
-                                    <div class="step-content">
-                                        <h4>Tải file Excel</h4>
-                                        <p>Sau khi xong (hoặc bất kỳ lúc nào), nhấn "Tải Excel" để tải file chứa link YouTube và trạng thái từng video đã upload.</p>
-                                    </div>
-                                </div>
+            <!-- Hỗ trợ & Liên hệ -->
+            <div class="card footer-card">
+                <div class="card-header card-header--muted">
+                    <h2>Hỗ trợ & Liên hệ</h2>
+                </div>
+                <div class="card-body footer-card-body">
+                    <div class="footer-grid">
+                        <div class="footer-info">
+                            <section class="footer-block">
+                                <h3 class="footer-title">Hỗ trợ dự án</h3>
+                                <p class="footer-text greeting">👋 Em Thanh Bình - Xiêu đẹp troai xin chào anh, chị, em và các bạn!</p>
+                                <p class="footer-text quote">💭 Với châm ngôn <strong>"tôi lười và bạn cũng vậy"</strong>. Nên em đã ngồi vắt óc vai cốt đing tạo ra bản V2.0.</p>
+                                <p class="footer-text message">✨ Vào một ngày đẹp trời nào đó khi mọi người chạy cái này mà thấy cái mã QR cụa em cũng rấc đẹp, cũng có thể tinh tinh vào dự án <strong>NUÔI EMS</strong> - nâng tầm bữa trưa \"trứng, chúc chích\".</p>
+                                <p class="footer-text message">🚀 Đồng thời cũng có thể giúp em có động lực ra bản V3.0 xin xò con bò hơn thì xeooo. hẹ hẹ</p>
+                            </section>
+                            <section class="footer-block">
+                                <h3 class="footer-title">Liên hệ</h3>
+                                <p class="footer-text">Mọi thắc mắc về cập nhật, báo lỗi hoặc vấn đề khác, vui lòng liên hệ qua Telegram: <strong>@Sieucapdeptrai03</strong></p>
+                            </section>
+                        </div>
+                        <div class="footer-qr">
+                            <div class="qr-wrap">
+                                <img src="{{ url_for('static', filename='xintien.jpg') }}" alt="QR hỗ trợ" class="qr-code">
                             </div>
                         </div>
                     </div>
@@ -104,7 +95,7 @@
             <!-- Configuration Card -->
             <div class="card config-card">
                 <div class="card-header">
-                    <h2><i class="fas fa-cog"></i> Cấu hình Upload</h2>
+                    <h2>Cấu hình upload</h2>
                 </div>
                 <div class="card-body">
                     <form id="uploadForm">
@@ -187,10 +178,6 @@
                                 <i class="fas fa-sign-in-alt"></i> Tiếp tục (Sau khi đăng nhập)
                             </button>
                         </div>
-                        <div class="contact-section">
-                            <h3 class="section-title"><i class="fas fa-envelope"></i> Liên hệ</h3>
-                            <p class="contact-message">Mọi thắc mắc về vấn đề Update, vá lỗi hoặc các vấn đề liên quan khác xin vui lòng liên hệ em Bềnh qua Telegram: <strong>@Sieucapdeptrai03</strong></p>
-                        </div>
                     </form>
                 </div>
             </div>
@@ -198,7 +185,7 @@
             <!-- Status Card -->
             <div class="card status-card">
                 <div class="card-header">
-                    <h2><i class="fas fa-chart-line"></i> Trạng thái</h2>
+                    <h2>Trạng thái</h2>
                 </div>
                 <div class="card-body">
                     <div class="status-grid">
@@ -235,14 +222,12 @@
             <!-- Logs Card -->
             <div class="card logs-card">
                 <div class="card-header">
-                    <h2><i class="fas fa-terminal"></i> Logs</h2>
-                    <button class="btn btn-sm btn-secondary" onclick="clearLogs()">
-                        <i class="fas fa-trash"></i> Xóa
-                    </button>
+                    <h2>Nhật ký</h2>
+                    <button class="btn btn-sm btn-secondary" onclick="clearLogs()">Xóa</button>
                 </div>
                 <div class="card-body">
                     <div class="logs-container" id="logsContainer">
-                        <div class="log-empty">Chưa có logs...</div>
+                        <div class="log-empty">Chưa có nhật ký.</div>
                     </div>
                 </div>
             </div>

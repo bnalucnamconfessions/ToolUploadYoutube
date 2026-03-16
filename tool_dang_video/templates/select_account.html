@@ -7,17 +7,87 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    .accounts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-    .account-card{border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow);background:#fff}
-    .account-title{font-weight:700;margin-bottom:8px}
-    .account-actions{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap}
-    .account-rename{display:flex;gap:8px;flex:1;min-width:200px}
-    .account-rename input{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px}
-    .top-actions{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap}
-    .muted{color:var(--gray)}
-    .cred-row{margin-top:10px}
-    .cred-row input{width:100%;padding:8px 10px;margin:4px 0;border:1px solid var(--border);border-radius:8px;box-sizing:border-box}
-    .cred-hint{font-size:0.85em;color:var(--gray);margin-top:4px}
+    .accounts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .account-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+      background: #fff;
+    }
+    .account-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--dark);
+    }
+    .account-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-start;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .account-edit-form {
+      margin-top: 10px;
+    }
+    .account-edit-form .account-input-wrap {
+      margin-bottom: 8px;
+    }
+    .account-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    .account-rename input.account-input {
+      border-radius: 8px;
+    }
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .muted {
+      color: var(--gray);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .cred-row {
+      margin-top: 10px;
+    }
+    .cred-row input {
+      margin: 4px 0;
+    }
+    .cred-row .account-input {
+      margin: 4px 0;
+    }
+    .cred-hint {
+      font-size: 0.85rem;
+      color: var(--gray);
+      margin-top: 4px;
+    }
+    .cred-buttons {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .account-name-row {
+      margin-top: 10px;
+    }
+    .account-name-row .account-input-wrap {
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
@@ -92,29 +162,62 @@
       accounts.forEach(acc => {
         const div = document.createElement("div");
         div.className = "account-card";
-        const credHint = acc.has_credentials ? `<div class="cred-hint"><i class="fas fa-lock"></i> Đã lưu đăng nhập ${escapeHtml(acc.email_masked || "")}</div>` : "";
-        div.innerHTML = `
-          <div class="account-title"><i class="fas fa-user"></i> ${escapeHtml(acc.label || ("Tài khoản " + acc.id))}</div>
-          <div class="muted">ID: <strong>${acc.id}</strong></div>
-          <div class="account-rename" style="margin-top:8px">
-            <input id="label_${acc.id}" placeholder="Tên hiển thị (vd: email)..." />
-            <button class="btn btn-secondary" onclick="renameAccount(${acc.id})"><i class="fas fa-pen"></i></button>
+        const displayEmail = acc.email || acc.email_masked || "";
+        const displayLabel = acc.label || (displayEmail ? displayEmail : ("Tài khoản " + acc.id));
+        const credHint = acc.has_credentials && displayEmail
+          ? `<div class="cred-hint"><i class="fas fa-lock"></i> Đã lưu đăng nhập <strong>${escapeHtml(displayEmail)}</strong></div>`
+          : (acc.has_credentials ? `<div class="cred-hint"><i class="fas fa-lock"></i> Đã lưu đăng nhập</div>` : "");
+        const editFormBlock = acc.has_credentials ? `
+          <div class="account-edit-form" style="display:none;">
+            <div class="account-input-wrap">
+              <input id="label_${acc.id}" class="account-input" placeholder="Tên tài khoản (tên hiển thị)..." value="${escapeHtml(acc.label || "")}" data-account-id="${acc.id}" />
+            </div>
           </div>
-          <div class="cred-row">
-            <input type="text" id="email_${acc.id}" placeholder="Email Google/YouTube" autocomplete="username" />
-            <input type="password" id="pw_${acc.id}" placeholder="Mật khẩu (lưu để tự đăng nhập)" autocomplete="current-password" />
-            ${credHint}
-            <button class="btn btn-secondary" style="margin-top:6px" onclick="saveCredentials(${acc.id})">
+        ` : "";
+        const nameRowNewAccount = !acc.has_credentials ? `
+          <div class="account-name-row">
+            <div class="account-input-wrap">
+              <input id="label_${acc.id}" class="account-input" placeholder="Tên tài khoản (tên hiển thị)..." value="${escapeHtml(acc.label || "")}" data-account-id="${acc.id}" />
+            </div>
+          </div>
+        ` : "";
+        const credButtons = `
+          <div class="cred-buttons">
+            <button type="button" class="btn btn-secondary" onclick="saveCredentials(${acc.id})">
               <i class="fas fa-save"></i> Lưu đăng nhập
             </button>
+            ${acc.has_credentials ? `<button type="button" class="btn btn-secondary btn-edit-name" onclick="startEdit(${acc.id})"><i class="fas fa-pen"></i> Chỉnh sửa</button>` : ""}
+          </div>
+        `;
+        div.innerHTML = `
+          <div class="account-title" data-account-id="${acc.id}"><i class="fas fa-user"></i> ${escapeHtml(displayLabel)}</div>
+          <div class="muted">ID profile: <strong>${acc.id}</strong>${displayEmail ? ` &nbsp;•&nbsp; Email: <strong>${escapeHtml(displayEmail)}</strong>` : ""}</div>
+          ${editFormBlock}
+          ${nameRowNewAccount}
+          <div class="cred-row">
+            <input type="text" id="email_${acc.id}" class="account-input" placeholder="Email Google/YouTube" autocomplete="username" value="${displayEmail ? escapeHtml(displayEmail) : ""}" />
+            <input type="password" id="pw_${acc.id}" class="account-input" placeholder="Mật khẩu (lưu để tự đăng nhập)" autocomplete="current-password" />
+            ${credHint}
+            ${credButtons}
           </div>
           <div class="account-actions" style="margin-top:10px">
             <button class="btn btn-success" onclick="chooseAccount(${acc.id})">
               <i class="fas fa-check"></i> Chọn profile này để upload
             </button>
+            <button class="btn btn-danger" onclick="deleteAccount(${acc.id})" title="Xóa tài khoản và profile Chrome">
+              <i class="fas fa-trash-alt"></i> Xóa tài khoản
+            </button>
           </div>
         `;
         wrap.appendChild(div);
+        const labelInput = document.getElementById("label_" + acc.id);
+        const titleEl = div.querySelector(".account-title");
+        if (labelInput && titleEl) {
+          labelInput.addEventListener("input", function () {
+            const v = this.value.trim();
+            titleEl.innerHTML = "<i class=\"fas fa-user\"></i> " + (v ? escapeHtml(v) : ("Tài khoản " + acc.id));
+          });
+        }
       });
     }
 
@@ -140,32 +243,54 @@
       }
     }
 
-    async function renameAccount(accountId){
-      const input = document.getElementById("label_" + accountId);
-      const label = (input?.value || "").trim();
-      if(!label){ alert("Nhập tên hiển thị trước."); return; }
+    function startEdit(accountId){
+      const card = document.getElementById("label_" + accountId)?.closest(".account-card");
+      if(!card) return;
+      const form = card.querySelector(".account-edit-form");
+      const btn = card.querySelector(".btn-edit-name");
+      if(form) form.style.display = "block";
+      if(btn) btn.style.display = "none";
+    }
+
+    async function deleteAccount(accountId){
+      if(!confirm("Bạn có chắc muốn xóa tài khoản này? Profile Chrome và dữ liệu đăng nhập lưu trong profile sẽ bị xóa vĩnh viễn.")) return;
+      const btn = event?.target?.closest("button");
+      if(btn) btn.disabled = true;
       try{
-        const res = await fetch("/api/accounts/rename", {
+        const res = await fetch("/api/accounts/delete", {
           method:"POST",
           headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({account_id: accountId, label})
+          body: JSON.stringify({account_id: accountId})
         });
         const data = await res.json();
-        if(!res.ok || !data.success) throw new Error(data.error || "Đổi tên thất bại");
+        if(!res.ok || !data.success) throw new Error(data.error || "Xóa thất bại");
         await load();
       }catch(e){
         alert(e.message);
+      }finally{
+        if(btn) btn.disabled = false;
       }
     }
 
     async function saveCredentials(accountId){
       const emailEl = document.getElementById("email_" + accountId);
       const pwEl = document.getElementById("pw_" + accountId);
+      const labelEl = document.getElementById("label_" + accountId);
       const email = (emailEl?.value || "").trim();
       const password = pwEl?.value || "";
+      const label = (labelEl?.value || "").trim();
       if(!email){ alert("Nhập email Google/YouTube."); return; }
       if(!password){ alert("Nhập mật khẩu để lưu (khi mở Chrome sẽ tự đăng nhập)."); return; }
       try{
+        if(label){
+          const resLabel = await fetch("/api/accounts/rename", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({account_id: accountId, label})
+          });
+          const dataLabel = await resLabel.json();
+          if(!resLabel.ok || !dataLabel.success) throw new Error(dataLabel.error || "Lưu tên tài khoản thất bại");
+        }
         const res = await fetch("/api/accounts/set-credentials", {
           method:"POST",
           headers:{"Content-Type":"application/json"},
@@ -173,7 +298,7 @@
         });
         const data = await res.json();
         if(!res.ok || !data.success) throw new Error(data.error || "Lưu thất bại");
-        alert("Đã lưu đăng nhập. Khi chọn profile này, Chrome sẽ tự nhập email/mật khẩu để đăng nhập.");
+        alert("Đã lưu tên tài khoản (nếu có), email và mật khẩu. Khi chọn profile này, Chrome sẽ tự nhập email/mật khẩu để đăng nhập.");
         await load();
       }catch(e){
         alert(e.message);
@@ -203,6 +328,7 @@
         const data = await res.json();
         if(!res.ok) throw new Error(data.error || "Không bắt đầu được upload");
         localStorage.removeItem("pendingUploadConfig");
+        try { sessionStorage.setItem("skip_notice_return", "1"); } catch(e) {}
         window.location.href = "/";
       }catch(e){
         alert(e.message);

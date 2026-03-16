@@ -37,6 +37,18 @@ python app.py
 
 Mở trình duyệt tại: **http://127.0.0.1:5000**
 
+## Đóng gói thành file EXE (chạy không cần cài Python)
+
+Trên máy đã cài Python và đã `pip install -r requirements.txt`:
+
+1. Cài PyInstaller (nếu chưa có): `pip install pyinstaller`
+2. Trong thư mục `tool_dang_video`, chạy:
+   - **Windows:** double-click `build_exe.bat` hoặc mở cmd và chạy `build_exe.bat`
+   - Hoặc: `pyinstaller --noconfirm YouTubeUploadTool.spec`
+3. File exe nằm tại: **`dist/YouTubeUploadTool.exe`**
+
+Copy `YouTubeUploadTool.exe` sang máy khác (không cần cài Python). Chỉ cần **cài Chrome** trên máy đó. Double-click exe để chạy; cửa sổ console hiện để xem log, trình duyệt sẽ tự mở http://127.0.0.1:5000. Thư mục profile Chrome và file Excel sẽ nằm **cùng thư mục với file exe**.
+
 ## Quy trình sử dụng
 
 1. **Chọn folder** chứa video (mp4, mov, mkv, …).

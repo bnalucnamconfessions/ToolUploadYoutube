@@ -37,24 +37,36 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start polling for status
     pollStatus();
 
-    // Thông báo từ xa (GitHub Raw / Gist)
+    // Thông báo từ xa (GitHub Raw / Gist) — gọi trong pageshow để luôn hiện khi vào/quay lại trang chủ
+});
+
+// Hiện thông báo từ xa khi vào trang chủ, nhưng không hiện khi vừa quay lại sau chọn tài khoản
+window.addEventListener('pageshow', function() {
+    if (!document.getElementById('remote-notice')) return;
+    try {
+        if (sessionStorage.getItem('skip_notice_return') === '1') {
+            sessionStorage.removeItem('skip_notice_return');
+            return;
+        }
+    } catch (e) {}
     loadRemoteNotice();
 });
 
-const NOTICE_STORAGE_KEY = 'yt_upload_notice_last_seen_version';
-
 function loadRemoteNotice() {
-    fetch('/api/notice')
+    // Cache-busting: mỗi lần mở trang gọi URL khác nhau để không dùng bản cache
+    fetch('/api/notice?_=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!data || !data.success || !data.notice) return;
             var n = data.notice;
-            var version = n.version != null ? n.version : 1;
-            var lastSeen = null;
-            try { lastSeen = parseInt(localStorage.getItem(NOTICE_STORAGE_KEY), 10); } catch (e) {}
-            if (lastSeen != null && version <= lastSeen) return;
             var title = (n.title || '').trim();
-            var message = (n.message || '').trim();
+            var rawMessage = n.message;
+            var message = '';
+            if (Array.isArray(rawMessage)) {
+                message = rawMessage.join('\n\n');
+            } else {
+                message = (rawMessage || '').trim();
+            }
             if (!title && !message) return;
             var el = document.getElementById('remote-notice');
             if (!el) return;
@@ -71,9 +83,14 @@ function loadRemoteNotice() {
             el.style.display = '';
             var closeBtn = el.querySelector('.remote-notice-close');
             if (closeBtn) {
+                // Khóa nút X trong 10s đầu để user có thời gian đọc
+                closeBtn.disabled = true;
+                setTimeout(function() {
+                    closeBtn.disabled = false;
+                }, 10000);
                 closeBtn.onclick = function() {
+                    if (closeBtn.disabled) return;
                     el.style.display = 'none';
-                    try { localStorage.setItem(NOTICE_STORAGE_KEY, String(version)); } catch (e) {}
                 };
             }
         })
