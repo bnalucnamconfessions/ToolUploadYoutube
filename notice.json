@@ -1,7 +1,10 @@
 {
   "version": 1,
   "title": "Thông báo từ nhà phát triển",
-  "message": "Chờ 10s mới X được ạ. Ai dùng tool nhớ donate nuôi ems nhé!\n\nHết vốn thông báo này sẽ mất! Cảm ơn mọi người.",
+  "message": [
+  "Chờ 10s mới X được ạ. Ai dùng tool nhớ donate nuôi ems nhé!",
+  "Hết vốn thông báo này sẽ mất! Cảm ơn mọi người."
+]
   "link": "https://t.me/Sieucapdeptrai03",
   "linkText": "Liên hệ Telegram"
 }
