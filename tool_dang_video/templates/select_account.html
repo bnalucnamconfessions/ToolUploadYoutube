@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chọn tài khoản YouTube</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .accounts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+    .account-card{border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow);background:#fff}
+    .account-title{font-weight:700;margin-bottom:8px}
+    .account-actions{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap}
+    .account-rename{display:flex;gap:8px;flex:1;min-width:200px}
+    .account-rename input{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px}
+    .top-actions{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap}
+    .muted{color:var(--gray)}
+    .cred-row{margin-top:10px}
+    .cred-row input{width:100%;padding:8px 10px;margin:4px 0;border:1px solid var(--border);border-radius:8px;box-sizing:border-box}
+    .cred-hint{font-size:0.85em;color:var(--gray);margin-top:4px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-content">
+        <h1><i class="fas fa-user-circle"></i> Chọn tài khoản YouTube</h1>
+        <p class="subtitle">Chọn profile Chrome để upload (1,2,3...).</p>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="card config-card">
+        <div class="card-header">
+          <h2><i class="fas fa-users"></i> Danh sách tài khoản</h2>
+        </div>
+        <div class="card-body">
+          <div class="top-actions">
+            <button class="btn btn-secondary" onclick="goBack()">
+              <i class="fas fa-arrow-left"></i> Quay lại cấu hình
+            </button>
+            <button class="btn btn-primary" onclick="createAccount()">
+              <i class="fas fa-plus"></i> Thêm tài khoản mới
+            </button>
+          </div>
+
+          <div style="height:12px"></div>
+          <div class="muted">
+            Mỗi profile lưu riêng email + mật khẩu YouTube. Khi chọn profile đó, Chrome mở ra sẽ tự động nhập email/mật khẩu để đăng nhập (lần đầu có thể cần 2FA tay). Không lưu thì đăng nhập tay lần đầu, cookie vẫn được lưu trong profile.
+          </div>
+
+          <div style="height:16px"></div>
+          <div id="accounts" class="accounts-grid"></div>
+          <div id="empty" class="muted" style="display:none">Chưa có tài khoản nào. Bấm "Thêm tài khoản mới".</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function goBack(){ window.location.href = "/"; }
+
+    function getPendingConfig(){
+      try{
+        const raw = localStorage.getItem("pendingUploadConfig");
+        return raw ? JSON.parse(raw) : null;
+      }catch(e){ return null; }
+    }
+
+    function setStatusText(el, txt){
+      if(!el) return;
+      el.innerHTML = txt;
+    }
+
+    async function fetchAccounts(){
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
+      if(!res.ok || !data.success) throw new Error(data.error || "Không lấy được danh sách tài khoản");
+      return data.accounts || [];
+    }
+
+    function renderAccounts(accounts){
+      const wrap = document.getElementById("accounts");
+      const empty = document.getElementById("empty");
+      wrap.innerHTML = "";
+      if(!accounts.length){
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+
+      accounts.forEach(acc => {
+        const div = document.createElement("div");
+        div.className = "account-card";
+        const credHint = acc.has_credentials ? `<div class="cred-hint"><i class="fas fa-lock"></i> Đã lưu đăng nhập ${escapeHtml(acc.email_masked || "")}</div>` : "";
+        div.innerHTML = `
+          <div class="account-title"><i class="fas fa-user"></i> ${escapeHtml(acc.label || ("Tài khoản " + acc.id))}</div>
+          <div class="muted">ID: <strong>${acc.id}</strong></div>
+          <div class="account-rename" style="margin-top:8px">
+            <input id="label_${acc.id}" placeholder="Tên hiển thị (vd: email)..." />
+            <button class="btn btn-secondary" onclick="renameAccount(${acc.id})"><i class="fas fa-pen"></i></button>
+          </div>
+          <div class="cred-row">
+            <input type="text" id="email_${acc.id}" placeholder="Email Google/YouTube" autocomplete="username" />
+            <input type="password" id="pw_${acc.id}" placeholder="Mật khẩu (lưu để tự đăng nhập)" autocomplete="current-password" />
+            ${credHint}
+            <button class="btn btn-secondary" style="margin-top:6px" onclick="saveCredentials(${acc.id})">
+              <i class="fas fa-save"></i> Lưu đăng nhập
+            </button>
+          </div>
+          <div class="account-actions" style="margin-top:10px">
+            <button class="btn btn-success" onclick="chooseAccount(${acc.id})">
+              <i class="fas fa-check"></i> Chọn profile này để upload
+            </button>
+          </div>
+        `;
+        wrap.appendChild(div);
+      });
+    }
+
+    function escapeHtml(text){
+      const div = document.createElement('div');
+      div.textContent = text ?? "";
+      return div.innerHTML;
+    }
+
+    async function createAccount(){
+      const btn = event?.target?.closest("button");
+      if(btn) btn.disabled = true;
+      try{
+        const res = await fetch("/api/accounts/create", {method:"POST", headers:{"Content-Type":"application/json"}, body:"{}"});
+        const data = await res.json();
+        if(!res.ok || !data.success) throw new Error(data.error || "Tạo tài khoản thất bại");
+        await load();
+        alert("Đã tạo tài khoản mới. Hãy chọn tài khoản đó để upload, Chrome sẽ mở ra để bạn đăng nhập lần đầu.");
+      }catch(e){
+        alert(e.message);
+      }finally{
+        if(btn) btn.disabled = false;
+      }
+    }
+
+    async function renameAccount(accountId){
+      const input = document.getElementById("label_" + accountId);
+      const label = (input?.value || "").trim();
+      if(!label){ alert("Nhập tên hiển thị trước."); return; }
+      try{
+        const res = await fetch("/api/accounts/rename", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({account_id: accountId, label})
+        });
+        const data = await res.json();
+        if(!res.ok || !data.success) throw new Error(data.error || "Đổi tên thất bại");
+        await load();
+      }catch(e){
+        alert(e.message);
+      }
+    }
+
+    async function saveCredentials(accountId){
+      const emailEl = document.getElementById("email_" + accountId);
+      const pwEl = document.getElementById("pw_" + accountId);
+      const email = (emailEl?.value || "").trim();
+      const password = pwEl?.value || "";
+      if(!email){ alert("Nhập email Google/YouTube."); return; }
+      if(!password){ alert("Nhập mật khẩu để lưu (khi mở Chrome sẽ tự đăng nhập)."); return; }
+      try{
+        const res = await fetch("/api/accounts/set-credentials", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({account_id: accountId, email, password})
+        });
+        const data = await res.json();
+        if(!res.ok || !data.success) throw new Error(data.error || "Lưu thất bại");
+        alert("Đã lưu đăng nhập. Khi chọn profile này, Chrome sẽ tự nhập email/mật khẩu để đăng nhập.");
+        await load();
+      }catch(e){
+        alert(e.message);
+      }
+    }
+
+    async function chooseAccount(accountId){
+      const cfg = getPendingConfig();
+      if(!cfg){
+        alert("Không có cấu hình upload. Hãy quay lại trang chính và bấm Bắt đầu Upload lại.");
+        return;
+      }
+      cfg.account_id = accountId;
+      // Ưu tiên bộ nhớ tạm Made for kids (tránh nhầm so với DOM/pendingConfig)
+      try{
+        const stored = localStorage.getItem("made_for_kids_choice");
+        if(stored === "yes" || stored === "no") cfg.made_for_kids = stored;
+        else if(!cfg.made_for_kids) cfg.made_for_kids = "no";
+      }catch(e){}
+
+      try{
+        const res = await fetch("/api/start-upload", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(cfg)
+        });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data.error || "Không bắt đầu được upload");
+        localStorage.removeItem("pendingUploadConfig");
+        window.location.href = "/";
+      }catch(e){
+        alert(e.message);
+      }
+    }
+
+    async function load(){
+      const accounts = await fetchAccounts();
+      renderAccounts(accounts);
+    }
+
+    load().catch(e => alert(e.message));
+  </script>
+</body>
+</html>

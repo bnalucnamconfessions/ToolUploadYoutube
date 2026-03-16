@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎬 YouTube Upload Tool</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-video"></i> YouTube Upload Tool</h1>
+                <p class="subtitle">Upload video lên YouTube tự động</p>
+            </div>
+        </header>
+
+        <!-- Thông báo từ xa (GitHub Raw / Gist) -->
+        <div id="remote-notice" class="remote-notice" style="display:none;" aria-live="polite">
+            <div class="remote-notice-inner">
+                <span class="remote-notice-icon"><i class="fas fa-bullhorn"></i></span>
+                <div class="remote-notice-body">
+                    <h4 id="remote-notice-title" class="remote-notice-title"></h4>
+                    <p id="remote-notice-message" class="remote-notice-message"></p>
+                    <a id="remote-notice-link" class="remote-notice-link" href="#" target="_blank" rel="noopener" style="display:none;"></a>
+                </div>
+                <button type="button" class="remote-notice-close" aria-label="Đóng"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Support & Guide Card -->
+            <div class="card support-card">
+                <div class="card-header support-header">
+                    <h2><i class="fas fa-heart"></i> Hỗ trợ dự án & Hướng dẫn</h2>
+                </div>
+                <div class="card-body support-body">
+                    <div class="support-guide-container">
+                        <!-- Hỗ trợ dự án -->
+                        <div class="support-section">
+                            <h3 class="section-title"><i class="fas fa-heart"></i> Hỗ trợ dự án</h3>
+                            <div class="support-content">
+                                <div class="support-message">
+                                    <p class="greeting">👋 Em Thanh Bình - Xiêu đẹp troai xin chào anh, chị, em và các bạn!</p>
+                                    <p class="quote">💭 Với châm ngôn <strong>"tôi lười và bạn cũng vậy"</strong>. Nên em đã ngồi vắt óc vai cốt đing tạo ra bản V2.0</p>
+                                    <p class="message">✨ Vào một ngày đẹp trời nào đó khi mọi người chạy cái này mà thấy cái mã QR cụa em cũng rấc đẹp, cũng có thể tinh tinh vào dự án <strong>NUÔI EMS</strong> - nâng tầm bữa trưa "trứng, chúc chích".</p>
+                                    <p class="message">🚀 Đồng thời cũng có thể giúp em có động lực ra bản V3.0 xin xò con bò hơn thì xeooo. hẹ hẹ</p>
+                                </div>
+                                <div class="qr-container">
+                                    <img src="{{ url_for('static', filename='xintien.jpg') }}" alt="QR Code hỗ trợ" class="qr-code">
+                                    <p class="qr-note">💝 Cảm ơn sự ủng hộ của mọi người!</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hướng dẫn sử dụng -->
+                        <div class="guide-section">
+                            <h3 class="section-title"><i class="fas fa-book"></i> Hướng dẫn sử dụng</h3>
+                            <div class="guide-content">
+                                <div class="guide-step">
+                                    <div class="step-number">1</div>
+                                    <div class="step-content">
+                                        <h4>Chọn folder chứa video</h4>
+                                        <p>Nhấn "Chọn Folder" và chọn thư mục chứa file video (mp4, mov, mkv, …) cần upload lên YouTube.</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="step-number">2</div>
+                                    <div class="step-content">
+                                        <h4>Cấu hình upload</h4>
+                                        <p>Điền tiêu đề video (hoặc để trống), chọn <strong>Made for kids</strong> (Có/Không), <strong>Visibility</strong> (Riêng tư / Không công khai / Công khai) và tên file Excel để lưu link + trạng thái.</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="step-number">3</div>
+                                    <div class="step-content">
+                                        <h4>Bắt đầu upload và chọn tài khoản</h4>
+                                        <p>Nhấn "Bắt đầu Upload" → chuyển sang trang chọn tài khoản (profile Chrome). Chọn profile để dùng; lần đầu có thể cần đăng nhập YouTube trong cửa sổ Chrome do tool mở.</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="step-number">4</div>
+                                    <div class="step-content">
+                                        <h4>Theo dõi tiến trình</h4>
+                                        <p>Xem trạng thái upload, số thành công/thất bại và log chi tiết. File Excel được cập nhật <strong>realtime</strong> sau mỗi video (link + trạng thái), không cần đợi hết batch.</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="step-number">5</div>
+                                    <div class="step-content">
+                                        <h4>Tải file Excel</h4>
+                                        <p>Sau khi xong (hoặc bất kỳ lúc nào), nhấn "Tải Excel" để tải file chứa link YouTube và trạng thái từng video đã upload.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Card -->
+            <div class="card config-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-cog"></i> Cấu hình Upload</h2>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm">
+                        <!-- Folder Selection -->
+                        <div class="form-group">
+                            <label for="folder"><i class="fas fa-folder"></i> Folder chứa video</label>
+                            <div class="input-group">
+                                <input type="text" id="folder" name="folder" placeholder="Chọn folder chứa video..." required readonly>
+                                <input type="file" id="folderPicker" webkitdirectory directory multiple onchange="handleFolderSelect(event)" aria-label="Chọn folder chứa video" title="Chọn folder chứa video">
+                                <button type="button" class="btn btn-secondary" onclick="selectFolder()">
+                                    <i class="fas fa-folder-open"></i> Chọn Folder
+                                </button>
+                            </div>
+                            <small class="help-text">
+                                <i class="fas fa-info-circle"></i> Nhấn "Chọn Folder" để chọn folder chứa video
+                            </small>
+                        </div>
+
+                        <!-- Tiêu đề video -->
+                        <div class="form-group">
+                            <label for="video_title"><i class="fas fa-heading"></i> Tiêu đề video</label>
+                            <input type="text" id="video_title" name="video_title" placeholder="Để trống = không điền tiêu đề (dùng tên file)">
+                            <small class="help-text">
+                                <i class="fas fa-info-circle"></i> Để trống nếu không cần đặt tiêu đề; YouTube sẽ dùng tên file
+                            </small>
+                        </div>
+
+                        <!-- Made for Kids -->
+                        <div class="form-group">
+                            <label><i class="fas fa-child"></i> Made for kids</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="made_for_kids" value="yes">
+                                    <span>Yes</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="made_for_kids" value="no" checked>
+                                    <span>No</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Visibility -->
+                        <div class="form-group">
+                            <label><i class="fas fa-eye"></i> Visibility</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="visibility" value="private">
+                                    <span><i class="fas fa-lock"></i> Private</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="visibility" value="unlisted" checked>
+                                    <span><i class="fas fa-eye-slash"></i> Unlisted</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="visibility" value="public">
+                                    <span><i class="fas fa-globe"></i> Public</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Excel Filename -->
+                        <div class="form-group">
+                            <label for="excel_filename"><i class="fas fa-file-excel"></i> File Excel</label>
+                            <input type="text" id="excel_filename" name="excel_filename" value="YouTube_Upload_Links.xlsx">
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary btn-large" id="startBtn">
+                                <i class="fas fa-play"></i> Bắt đầu Upload
+                            </button>
+                            <button type="button" class="btn btn-danger btn-large" id="stopBtn" disabled>
+                                <i class="fas fa-stop"></i> Dừng
+                            </button>
+                            <button type="button" class="btn btn-success btn-large hidden" id="downloadBtn">
+                                <i class="fas fa-download"></i> Tải Excel
+                            </button>
+                            <button type="button" class="btn btn-warning btn-large hidden" id="continueLoginBtn">
+                                <i class="fas fa-sign-in-alt"></i> Tiếp tục (Sau khi đăng nhập)
+                            </button>
+                        </div>
+                        <div class="contact-section">
+                            <h3 class="section-title"><i class="fas fa-envelope"></i> Liên hệ</h3>
+                            <p class="contact-message">Mọi thắc mắc về vấn đề Update, vá lỗi hoặc các vấn đề liên quan khác xin vui lòng liên hệ em Bềnh qua Telegram: <strong>@Sieucapdeptrai03</strong></p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Status Card -->
+            <div class="card status-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-chart-line"></i> Trạng thái</h2>
+                </div>
+                <div class="card-body">
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-label">Trạng thái</div>
+                            <div class="status-value" id="statusText">Chưa bắt đầu</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Tổng số video</div>
+                            <div class="status-value" id="totalFiles">0</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">File hiện tại</div>
+                            <div class="status-value" id="currentFile">-</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Thành công</div>
+                            <div class="status-value success" id="successCount">0</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Thất bại</div>
+                            <div class="status-value error" id="failCount">0</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Card -->
+            <div class="card logs-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-terminal"></i> Logs</h2>
+                    <button class="btn btn-sm btn-secondary" onclick="clearLogs()">
+                        <i class="fas fa-trash"></i> Xóa
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="logs-container" id="logsContainer">
+                        <div class="log-empty">Chưa có logs...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
+
