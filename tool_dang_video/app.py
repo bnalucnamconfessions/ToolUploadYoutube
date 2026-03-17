@@ -158,6 +158,10 @@ def run_upload():
             try:
                 # Wait for login if needed
                 if upload_status['waiting_for_login']:
+                    try:
+                        tooldangvideo._dbg("WL1", "run_upload waiting_for_login true", {"current_file": os.path.basename(file_path)}, run_id="login_wait")
+                    except Exception:
+                        pass
                     log_callback('Đang chờ đăng nhập...')
                     login_event.wait()
                     login_event.clear()
@@ -182,6 +186,8 @@ def run_upload():
                 # Callback: khi có link (trước hoặc sau bấm Lưu) — log Link + cập nhật Excel ngay
                 excel_filename = file_info.get('excel_filename', 'YouTube_Upload_Links.xlsx')
                 def on_link_available(url):
+                    if not url or url == "N/A":
+                        return
                     log_callback(f'Link: {url}')
                     p = tooldangvideo.append_excel_row(
                         file_name=os.path.basename(file_path),
@@ -209,23 +215,26 @@ def run_upload():
                     upload_status['success_count'] += 1
                     log_callback(f'✅ Upload thành công: {os.path.basename(file_path)}')
                     if not result.get('excel_done'):
-                        log_callback(f'Link: {result.get("url", "N/A")}')
+                        if result.get("url"):
+                            log_callback(f'Link: {result.get("url")}')
                         try:
                             url = result.get("url")
-                            excel_path = tooldangvideo.append_excel_row(
-                                file_name=os.path.basename(file_path),
-                                url=(url if (url and url != "N/A") else ""),
-                                status="SUCCESS",
-                                excel_filename=excel_filename,
-                                log_callback=log_callback
-                            )
-                            if excel_path and os.path.exists(excel_path):
-                                upload_status['excel_file'] = excel_path
-                                log_callback(f'📄 Đã cập nhật Excel: {excel_path}')
+                            if url and url != "N/A":
+                                excel_path = tooldangvideo.append_excel_row(
+                                    file_name=os.path.basename(file_path),
+                                    url=url,
+                                    status="SUCCESS",
+                                    excel_filename=excel_filename,
+                                    log_callback=log_callback
+                                )
+                                if excel_path and os.path.exists(excel_path):
+                                    upload_status['excel_file'] = excel_path
+                                    log_callback(f'📄 Đã cập nhật Excel: {excel_path}')
                         except Exception as e:
                             log_callback(f'⚠️ Lỗi khi cập nhật Excel realtime: {str(e)}')
                     else:
-                        log_callback(f'Link: {result.get("url", "N/A")}')
+                        if result.get("url"):
+                            log_callback(f'Link: {result.get("url")}')
                         if upload_status.get('excel_file') and os.path.exists(upload_status['excel_file']):
                             log_callback(f'📄 Excel đã được cập nhật realtime: {upload_status["excel_file"]}')
                 else:

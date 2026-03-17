@@ -69,6 +69,49 @@ def _log(log_callback, message):
     if log_callback:
         log_callback(message)
 
+# #region agent log (debug-mode NDJSON)
+def _dbg(hypothesis_id: str, message: str, data=None, run_id: str = "speed_profile"):
+    """Ghi NDJSON debug (không ghi dữ liệu nhạy cảm)."""
+    try:
+        payload = {
+            "sessionId": "57c0c7",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": "tool_dang_video/tooldangvideo.py",
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time.time() * 1000),
+        }
+        # Ghi ra vài path có thể tồn tại (chạy từ source hoặc PyInstaller)
+        candidates = []
+        try:
+            candidates.append(os.path.join(os.getcwd(), "debug-57c0c7.log"))
+        except Exception:
+            pass
+        try:
+            candidates.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, "debug-57c0c7.log")))
+        except Exception:
+            pass
+        try:
+            candidates.append(os.path.join(os.path.dirname(__file__), "debug-57c0c7.log"))
+        except Exception:
+            pass
+        for p in candidates:
+            try:
+                with open(p, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+    except Exception:
+        pass
+# #endregion agent log
+
+
+# Cache nhẹ để tránh set width/header lặp lại (tăng tốc ghi Excel realtime).
+# Lưu ý: upload chạy 1 thread, nên cache này an toàn trong phạm vi tool hiện tại.
+_EXCEL_WIDTHS_SET = set()   # excel_path
+_EXCEL_HEADER_OK = set()    # excel_path
+
 
 # #region agent log
 def _agent_excel_path(excel_filename: str):
@@ -112,23 +155,26 @@ def append_excel_row(file_name: str, url: str, status: str, excel_filename: str 
         )
     except Exception:
         pass
+    t0 = time.time()
     try:
         if os.path.exists(excel_path):
             wb = load_workbook(excel_path)
             ws = wb.active
             # Nếu file cũ chưa có cột Trạng thái thì thêm vào cuối (để tương thích ngược)
-            try:
-                header = [str(c.value or "").strip() for c in ws[1]]
-                if "Trạng thái" not in header:
-                    col = len(header) + 1
-                    ws.cell(row=1, column=col, value="Trạng thái")
-                    ws.cell(row=1, column=col).font = Font(bold=True)
-                    ws.cell(row=1, column=col).alignment = Alignment(horizontal="center")
-                    # fill rỗng cho các dòng cũ
-                    for r in range(2, ws.max_row + 1):
-                        ws.cell(row=r, column=col, value=ws.cell(row=r, column=col).value or "")
-            except Exception:
-                pass
+            if excel_path not in _EXCEL_HEADER_OK:
+                try:
+                    header = [str(c.value or "").strip() for c in ws[1]]
+                    if "Trạng thái" not in header:
+                        col = len(header) + 1
+                        ws.cell(row=1, column=col, value="Trạng thái")
+                        ws.cell(row=1, column=col).font = Font(bold=True)
+                        ws.cell(row=1, column=col).alignment = Alignment(horizontal="center")
+                        # fill rỗng cho các dòng cũ
+                        for r in range(2, ws.max_row + 1):
+                            ws.cell(row=r, column=col, value=ws.cell(row=r, column=col).value or "")
+                    _EXCEL_HEADER_OK.add(excel_path)
+                except Exception:
+                    pass
         else:
             wb = Workbook()
             ws = wb.active
@@ -145,9 +191,12 @@ def append_excel_row(file_name: str, url: str, status: str, excel_filename: str 
             ws.cell(row=ws.max_row, column=5, value=status or "")
         except Exception:
             pass
-        _set_excel_column_widths(ws, 5)
+        if excel_path not in _EXCEL_WIDTHS_SET:
+            _set_excel_column_widths(ws, 5)
+            _EXCEL_WIDTHS_SET.add(excel_path)
         wb.save(excel_path)
         _log(log_callback, f"📄 Đã cập nhật Excel: {excel_path}")
+        _dbg("E1", "append_excel_row saved", {"ms": int((time.time() - t0) * 1000), "file": os.path.basename(file_name or ""), "hasUrl": bool(url), "status": status, "excel": os.path.basename(excel_path)})
         try:
             _agent_debug_log(
                 "X1",
@@ -195,16 +244,20 @@ def ensure_excel_initialized(excel_filename: str = "YouTube_Upload_Links.xlsx", 
         if os.path.exists(excel_path):
             wb = load_workbook(excel_path)
             ws = wb.active
-            header = [str(c.value or "").strip() for c in ws[1]]
-            if "Trạng thái" not in header:
-                col = len(header) + 1
-                ws.cell(row=1, column=col, value="Trạng thái")
-                ws.cell(row=1, column=col).font = Font(bold=True)
-                ws.cell(row=1, column=col).alignment = Alignment(horizontal="center")
-                for r in range(2, ws.max_row + 1):
-                    ws.cell(row=r, column=col, value=ws.cell(row=r, column=col).value or "")
+            if excel_path not in _EXCEL_HEADER_OK:
+                header = [str(c.value or "").strip() for c in ws[1]]
+                if "Trạng thái" not in header:
+                    col = len(header) + 1
+                    ws.cell(row=1, column=col, value="Trạng thái")
+                    ws.cell(row=1, column=col).font = Font(bold=True)
+                    ws.cell(row=1, column=col).alignment = Alignment(horizontal="center")
+                    for r in range(2, ws.max_row + 1):
+                        ws.cell(row=r, column=col, value=ws.cell(row=r, column=col).value or "")
+                _EXCEL_HEADER_OK.add(excel_path)
+            if excel_path not in _EXCEL_WIDTHS_SET:
                 _set_excel_column_widths(ws, 5)
-                wb.save(excel_path)
+                _EXCEL_WIDTHS_SET.add(excel_path)
+            wb.save(excel_path)
         else:
             wb = Workbook()
             ws = wb.active
@@ -214,6 +267,8 @@ def ensure_excel_initialized(excel_filename: str = "YouTube_Upload_Links.xlsx", 
                 cell.font = Font(bold=True)
                 cell.alignment = Alignment(horizontal="center")
             _set_excel_column_widths(ws, 5)
+            _EXCEL_WIDTHS_SET.add(excel_path)
+            _EXCEL_HEADER_OK.add(excel_path)
             wb.save(excel_path)
         try:
             _agent_debug_log(
@@ -273,9 +328,18 @@ def _handle_prechecks_warning_after_done(driver, log_callback=None):
         # 2) Nếu có dialog warning: ưu tiên bấm "Vẫn xuất bản"
         # Selector theo DOM bạn gửi: ytcp-prechecks-warning-dialog + secondary-action-button
         try:
+            # implicit_wait=10s có thể làm WebDriverWait(2s) bị kéo thành ~10s.
+            try:
+                driver.implicitly_wait(0)
+            except Exception:
+                pass
             dialog = WebDriverWait(driver, 2).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "ytcp-prechecks-warning-dialog"))
             )
+            try:
+                driver.implicitly_wait(10)
+            except Exception:
+                pass
             try:
                 _agent_debug_log(
                     "P1",
@@ -312,7 +376,8 @@ def _handle_prechecks_warning_after_done(driver, log_callback=None):
                     publish_btn.click()
                 except Exception:
                     driver.execute_script("arguments[0].click();", publish_btn)
-                _log(log_callback, "Đã xác nhận cảnh báo: Vẫn xuất bản.")
+                # Đây là dialog prechecks có thể còn sót từ lần trước; log rõ ngữ cảnh để tránh hiểu nhầm.
+                _log(log_callback, "Đã dọn cảnh báo pre-checks: Vẫn xuất bản.")
                 try:
                     _agent_debug_log(
                         "P2",
@@ -326,6 +391,10 @@ def _handle_prechecks_warning_after_done(driver, log_callback=None):
             return False
         except Exception:
             # Không có dialog
+            try:
+                driver.implicitly_wait(10)
+            except Exception:
+                pass
             try:
                 _agent_debug_log(
                     "P1",
@@ -366,10 +435,22 @@ def _click_next(driver, log_callback, step_name=""):
         except Exception:
             pass
         # ytcp-button#next-button (bước Chi tiết, Các thành phần của video, Kiểm tra); aria-label tiếng Việt "Tiếp"
-        next_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((
-            By.CSS_SELECTOR,
-            "ytcp-button#next-button, #next-button, button[aria-label='Tiếp'], button[aria-label='Next']"
-        )))
+        # Tối ưu: thử nhanh trước (để không “đợi 10s” khi nút đã sẵn), fail mới fallback lâu hơn.
+        sel = "ytcp-button#next-button, #next-button, button[aria-label='Tiếp'], button[aria-label='Next']"
+        # Tắt implicit wait tạm thời để "thử nhanh 2s" thật sự là 2s (tránh bị kéo thành 10s).
+        try:
+            driver.implicitly_wait(0)
+        except Exception:
+            pass
+        try:
+            next_btn = WebDriverWait(driver, 2).until(EC.element_to_be_clickable((By.CSS_SELECTOR, sel)))
+        except TimeoutException:
+            next_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, sel)))
+        finally:
+            try:
+                driver.implicitly_wait(10)
+            except Exception:
+                pass
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_btn)
         next_btn.click()
         if step_name and log_callback:
@@ -444,42 +525,98 @@ def _handle_checks_and_copyright(driver, wait, log_callback):
         # Trạng thái đã xong: không phát hiện vấn đề nào -> bỏ qua bước bản quyền, Next luôn
         if status_desc and "Không phát hiện vấn đề nào" in status_desc:
             _log(log_callback, "Kiểm tra bản quyền: Không phát hiện vấn đề nào, bỏ qua bước Xem chi tiết.")
+            # Nút Next ở bước này thường đã sẵn sàng ngay khi ra kết quả.
+            # Thử bấm ngay bằng JS để tránh delay do implicit/overlay; nếu fail thì luồng ngoài sẽ bấm tiếp.
+            try:
+                clicked_next = driver.execute_script(
+                    "try{"
+                    "var cand=["
+                    "document.querySelector('ytcp-uploads-dialog ytcp-button#next-button'),"
+                    "document.querySelector('ytcp-button#next-button'),"
+                    "document.querySelector('#next-button'),"
+                    "document.querySelector(\"button[aria-label*='Tiếp'], button[aria-label*='Next']\")"
+                    "].filter(Boolean);"
+                    "for(var i=0;i<cand.length;i++){"
+                    "  var el=cand[i];"
+                    "  var b=(el.tagName==='YTCP-BUTTON')?(el.querySelector('button')||el):el;"
+                    "  var dis=b.disabled || b.getAttribute('aria-disabled')==='true' || b.hasAttribute('disabled');"
+                    "  if(!dis){"
+                    "    (b.scrollIntoView?b.scrollIntoView({block:'center'}):0);"
+                    "    b.click();"
+                    "    return true;"
+                    "  }"
+                    "}"
+                    "return false;"
+                    "}catch(e){return false;}"
+                )
+                if clicked_next:
+                    _log(log_callback, "Đã bấm Next ngay khi có kết quả kiểm tra bản quyền.")
+            except Exception:
+                pass
             return True
 
-        # Chỉ khi thực sự hiện câu "Phát hiện có nội dung được bảo hộ bản quyền..."
-        # thì mới coi là có cảnh báo bản quyền cần xử lý
+        # Theo yêu cầu: chỉ cần có dòng "Phát hiện có nội dung được bảo hộ bản quyền"
+        # thì luôn ưu tiên bấm "Xem chi tiết" để chạy các bước xử lý tiếp theo.
+
+        # Có claim bản quyền -> luôn mở "Xem chi tiết"
         if status_desc and "Phát hiện có nội dung được bảo hộ bản quyền" in status_desc:
             _log(log_callback, "Phát hiện cảnh báo bản quyền, đang chờ nút Xem chi tiết (YouTube kiểm tra có thể vài phút)...")
             # Chờ nút "Xem chi tiết" xuất hiện — tối đa 5 phút, không báo lỗi trong lúc chờ
+            #
+            # Lưu ý: UI mới nhiều khi render là <button class="ytcpButtonShapeImplHost"... aria-label="Xem chi tiết">
+            # (không phải ytcp-button), nên ưu tiên bắt theo aria-label/text và JS-click.
             clicked = False
             try:
-                btn = WebDriverWait(driver, 300).until(EC.element_to_be_clickable((
-                    By.CSS_SELECTOR,
-                    "#copyright-status #results-action ytcp-button, "
-                    "#copyright-status button[aria-label*='Xem chi ti'], "
-                    "ytcp-uploads-check-status#copyright-status [id='results-action'] ytcp-button"
-                )))
-                time.sleep(1)
-                btn.click()
-                clicked = True
-                _log(log_callback, "Đã bấm Xem chi tiết.")
-                time.sleep(3)
+                # JS-fast probe/click (ổn định với cả button shape mới)
+                t0 = time.time()
+                # Thử click trong một khoảng hợp lý; nếu YouTube vẫn render chậm thì fallback bằng wait khác.
+                while (time.time() - t0) < 120:
+                    ok = False
+                    try:
+                        ok = bool(driver.execute_script(
+                            "try{"
+                            "var root=document.querySelector('#copyright-status')||document;"
+                            "var b=root.querySelector(\"button[aria-label*='Xem chi'],button[aria-label*='View details'],button[title*='Xem chi']\");"
+                            "if(!b){"
+                            "  var all=[...root.querySelectorAll('button')];"
+                            "  b=all.find(x=>((x.innerText||'').trim().toLowerCase().includes('xem chi')||(x.innerText||'').trim().toLowerCase().includes('view details')));"
+                            "}"
+                            "if(!b) return false;"
+                            "var dis=b.disabled||b.getAttribute('aria-disabled')==='true'||b.hasAttribute('disabled');"
+                            "if(dis) return false;"
+                            "b.scrollIntoView({block:'center'});"
+                            "b.click();"
+                            "return true;"
+                            "}catch(e){return false;}"
+                        ))
+                    except Exception:
+                        ok = False
+                    if ok:
+                        clicked = True
+                        _log(log_callback, "Đã bấm Xem chi tiết.")
+                        time.sleep(3)
+                        break
+                    time.sleep(1.0)
             except Exception:
                 pass
             if not clicked:
                 try:
-                    btn = WebDriverWait(driver, 120).until(EC.element_to_be_clickable((
+                    btn = WebDriverWait(driver, 120).until(EC.presence_of_element_located((
                         By.XPATH,
-                        "//*[contains(text(),'Xem chi tiết') or contains(text(),'Xem chi tiết') or contains(text(),'View details')]"
+                        "//*[self::button or self::ytcp-button or self::tp-yt-paper-button][contains(@aria-label,'Xem chi') or contains(.,'Xem chi') or contains(.,'View details')]"
                     )))
-                    btn.click()
+                    try:
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+                        driver.execute_script("arguments[0].click();", btn)
+                    except Exception:
+                        btn.click()
                     clicked = True
                     _log(log_callback, "Đã bấm Xem chi tiết.")
                     time.sleep(3)
                 except Exception:
                     pass
             if not clicked:
-                _log(log_callback, "❌ Lỗi: Không tìm thấy nút Xem chi tiết (kiểm tra bản quyền chưa xong hoặc giao diện đổi). Chuyển video khác.")
+                _log(log_callback, "❌ Lỗi: Có cảnh báo bản quyền nhưng không bấm được nút Xem chi tiết. Chuyển video khác.")
                 return False
             time.sleep(2)
             # Chọn cách giải quyết — chờ dialog mở rồi mới bấm (tối đa 15s)
@@ -788,14 +925,17 @@ def ensure_youtube_login(driver, email, password, log_callback=None):
         driver.get(YOUTUBE_STUDIO_URL)
         time.sleep(3)
         url = driver.current_url
+        _dbg("LG1", "ensure_youtube_login landing", {"url": (url or "")[:160]})
         if "accounts.google.com" in url or "signin" in url.lower() or "login" in url.lower():
             _log(log_callback, "Đang tự động đăng nhập bằng email/mật khẩu đã lưu...")
         else:
             body_text = driver.find_element(By.TAG_NAME, "body").text
+            _dbg("LG2", "ensure_youtube_login body scan", {"hasSignInText": ("Đăng nhập" in body_text) or ("Sign in" in body_text) or ("Sign in to YouTube" in body_text), "url": (driver.current_url or "")[:160]})
             if "Đăng nhập" in body_text or "Sign in" in body_text or "Sign in to YouTube" in body_text:
                 _log(log_callback, "Phát hiện trang đăng nhập, đang điền email/mật khẩu...")
             else:
                 _log(log_callback, "Đã đăng nhập sẵn (cookie profile).")
+                _dbg("LG3", "ensure_youtube_login already logged", {"url": (driver.current_url or "")[:160]})
                 return
         if "accounts.google.com" not in driver.current_url:
             try:
@@ -861,10 +1001,13 @@ def ensure_youtube_login(driver, email, password, log_callback=None):
         time.sleep(3)
         if "accounts.google.com" in driver.current_url:
             _log(log_callback, "Có thể cần xác minh 2 bước hoặc captcha — vui lòng đăng nhập tay trên Chrome.")
+            _dbg("LG9", "ensure_youtube_login still on accounts.google.com", {"url": (driver.current_url or "")[:160]})
         else:
             _log(log_callback, "Đã đăng nhập xong (tự động).")
+            _dbg("LG8", "ensure_youtube_login done", {"url": (driver.current_url or "")[:160]})
     except Exception as e:
         _log(log_callback, f"Tự động đăng nhập lỗi: {e}")
+        _dbg("LGX", "ensure_youtube_login exception", {"err": str(e)[:200]})
 
 
 def init_driver(headless=False, use_saved_profile=True, profile_dir=None):
@@ -901,15 +1044,57 @@ def init_driver(headless=False, use_saved_profile=True, profile_dir=None):
             options.add_argument(f"--user-data-dir={chosen_profile_dir}")
             options.add_argument("--profile-directory=Default")
 
+            # #region agent log (debug-mode NDJSON)
+            try:
+                _dbg("CH1", "init_driver profile prepared", {"profileDir": chosen_profile_dir})
+            except Exception:
+                pass
+            # #endregion agent log
+
+            # Xóa file DevToolsActivePort còn sót lại (thường gây session not created / invalid session)
+            try:
+                dtap = os.path.join(chosen_profile_dir, "DevToolsActivePort")
+                if os.path.exists(dtap):
+                    try:
+                        os.remove(dtap)
+                        _dbg("CH2", "removed DevToolsActivePort", {"path": "DevToolsActivePort"})
+                    except Exception as e:
+                        _dbg("CH2", "failed remove DevToolsActivePort", {"err": str(e)[:120]})
+            except Exception:
+                pass
+
         _agent_debug_log(
             "H1",
             "Attempting to start Chrome WebDriver",
             {"useSavedProfile": use_saved_profile, "profileDir": chosen_profile_dir},
         )
         # Thử dùng Chrome mặc định (chromedriver trong PATH hoặc Selenium Manager)
-        driver = webdriver.Chrome(options=options)
+        try:
+            driver = webdriver.Chrome(options=options)
+        except WebDriverException as e:
+            # #region agent log (debug-mode NDJSON)
+            try:
+                _dbg("CHX", "webdriver.Chrome failed (first attempt)", {"err": str(e)[:200]})
+            except Exception:
+                pass
+            # #endregion agent log
+            # Retry 1 lần (sau khi đã xoá DevToolsActivePort)
+            driver = webdriver.Chrome(options=options)
         driver.maximize_window()
         driver.implicitly_wait(10)
+        # Giảm nguy cơ execute_script bị treo lâu (đặc biệt khi Studio lag/overlay).
+        try:
+            driver.set_script_timeout(6)
+        except Exception:
+            pass
+        try:
+            driver.set_page_load_timeout(45)
+        except Exception:
+            pass
+        try:
+            _dbg("CH3", "driver timeouts set", {"scriptTimeoutS": 6, "pageLoadTimeoutS": 45})
+        except Exception:
+            pass
         _agent_debug_log(
             "H1",
             "Chrome WebDriver started successfully",
@@ -925,6 +1110,12 @@ def init_driver(headless=False, use_saved_profile=True, profile_dir=None):
             {"error": str(e)},
             run_id="init_driver_error",
         )
+        # #region agent log (debug-mode NDJSON)
+        try:
+            _dbg("CH9", "init_driver WebDriverException bubbled", {"err": str(e)[:220]})
+        except Exception:
+            pass
+        # #endregion agent log
         # Ném lại lỗi để phía trên ghi log rõ ràng, tránh tự động chuyển sang Edge
         raise e
 
@@ -932,21 +1123,211 @@ def init_driver(headless=False, use_saved_profile=True, profile_dir=None):
 def _try_get_video_link_from_page(driver):
     """Thử lấy link video từ trang hiện tại (trước hoặc sau khi bấm Done). Trả về url hoặc None."""
     try:
-        link_el = driver.find_elements(By.CSS_SELECTOR, "ytcp-video-info a[href*='youtu.be'], ytcp-video-info a[href*='youtube.com/watch']")
+        def _extract_video_id(u: str):
+            if not u:
+                return None
+            u = str(u).strip()
+            # watch?v=
+            m = re.search(r"[?&]v=([\w-]{6,})", u)
+            if m:
+                return m.group(1)
+            # youtu.be/<id>
+            m = re.search(r"youtu\.be/([\w-]{6,})", u)
+            if m:
+                return m.group(1)
+            # youtube.com/shorts/<id>
+            m = re.search(r"youtube\.com/shorts/([\w-]{6,})", u)
+            if m:
+                return m.group(1)
+            # studio.youtube.com/video/<id>/...
+            m = re.search(r"studio\.youtube\.com/video/([\w-]{6,})", u)
+            if m:
+                return m.group(1)
+            return None
+
+        def _normalize_youtube_url(u: str):
+            vid = _extract_video_id(u)
+            if vid:
+                return f"https://youtu.be/{vid}"
+            return None
+
+        link_el = driver.find_elements(
+            By.CSS_SELECTOR,
+            "ytcp-video-info a[href*='youtu.be'], "
+            "ytcp-video-info a[href*='youtube.com/watch'], "
+            "ytcp-video-info a[href*='youtube.com/shorts'], "
+            "ytcp-video-info a[href*='studio.youtube.com/video']"
+        )
         if not link_el:
-            link_el = driver.find_elements(By.CSS_SELECTOR, "a[href*='youtu.be'], a[href*='youtube.com/watch']")
+            link_el = driver.find_elements(
+                By.CSS_SELECTOR,
+                "a[href*='youtu.be'], a[href*='youtube.com/watch'], a[href*='youtube.com/shorts'], a[href*='studio.youtube.com/video']"
+            )
         if link_el:
             url = link_el[0].get_attribute("href")
             if url:
+                n = _normalize_youtube_url(url)
+                if n:
+                    return n
                 return url.split("&")[0].strip()
         page_source = driver.page_source
-        for pattern in (r"https?://(?:www\.)?youtu\.be/[\w-]+", r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+"):
+        for pattern in (
+            r"https?://(?:www\.)?youtu\.be/[\w-]+",
+            r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
+            r"https?://(?:www\.)?youtube\.com/shorts/[\w-]+",
+            r"https?://studio\.youtube\.com/video/[\w-]+[^\s\"']*",
+        ):
             match = re.search(pattern, page_source)
             if match:
-                return match.group(0).split("&")[0]
+                u = match.group(0).split("&")[0]
+                n = _normalize_youtube_url(u)
+                return n or u
     except Exception:
         pass
     return None
+
+
+def _dismiss_blocking_dialogs(driver, log_callback=None):
+    """Đóng các dialog/overlay hay chặn thao tác (không ghi dữ liệu nhạy cảm)."""
+    try:
+        t0 = time.time()
+        _dbg("Ddlg0", "dismiss dialogs enter", {"url": (getattr(driver, "current_url", "") or "")[:160]})
+        # Budget nhỏ để tránh treo lâu ở bước dismiss (log runtime cho thấy có thể tốn 60-70s).
+        max_budget_s = 6.0
+        # JS-first: tránh các Selenium find_elements bị stall lâu (runtime evidence).
+        try:
+            driver.execute_script(
+                "try{"
+                "document.querySelectorAll('tp-yt-paper-dialog').forEach(d=>{d.style.display='none'; d.setAttribute('aria-hidden','true');});"
+                "document.querySelectorAll('.tp-yt-iron-overlay-backdrop').forEach(b=>{b.style.display='none';});"
+                "}catch(e){}"
+            )
+        except Exception:
+            pass
+        # prechecks warning (nếu còn)
+        try:
+            has_prechecks = bool(driver.execute_script("try{return !!document.querySelector('ytcp-prechecks-warning-dialog');}catch(e){return false;}"))
+            if has_prechecks:
+                _dbg("Ddlg1", "prechecks dialog present", {})
+                # JS-fast: dọn popup prechecks còn sót (ưu tiên selector ổn định).
+                try:
+                    clicked = driver.execute_script(
+                        "try{"
+                        "var d=document.querySelector('ytcp-prechecks-warning-dialog');"
+                        "if(!d) return false;"
+                        "var b = d.querySelector(\"ytcp-button#secondary-action-button button, #secondary-action-button button, button[aria-label*='Vẫn'], button[aria-label*='xuất bản']\");"
+                        "if(b){b.click(); return true;}"
+                        "// fallback by text"
+                        "var btns=[...d.querySelectorAll('button')];"
+                        "var texts=['Vẫn xuất bản','Publish anyway','Xuất bản','Publish','OK','Đồng ý','Accept','Got it'];"
+                        "for(var x of btns){var t=(x.innerText||'').trim();"
+                        "for(var s of texts){if(t && t.includes(s)){x.click(); return true;}}}"
+                        "return false;"
+                        "}catch(e){return false;}"
+                    )
+                    _dbg("Ddlg1j", "prechecks js-click attempted", {"clicked": bool(clicked)})
+                except Exception:
+                    pass
+                # JS-fast: remove dialog/backdrop để tránh “dính” sang video sau
+                try:
+                    driver.execute_script(
+                        "try{"
+                        "document.querySelectorAll('ytcp-prechecks-warning-dialog').forEach(x=>x.remove());"
+                        "document.querySelectorAll('.tp-yt-iron-overlay-backdrop').forEach(b=>b.remove());"
+                        "}catch(e){}"
+                    )
+                except Exception:
+                    pass
+                # Không gọi handler nặng ở đây để tránh stall ~20s; handler được dùng ở bước sau Done.
+        except Exception:
+            pass
+
+        # Uploads dialog: thử bấm nút close (X) hoặc ESC
+        try:
+            has_uploads = bool(driver.execute_script("try{return !!document.querySelector('ytcp-uploads-dialog');}catch(e){return false;}"))
+            if has_uploads:
+                _dbg("Ddlg2", "uploads dialog present", {})
+                # JS-first: đóng + remove ngay, tránh find_elements/Wait có thể stall lâu
+                try:
+                    driver.execute_script(
+                        "try{"
+                        "var d=document.querySelector('ytcp-uploads-dialog');"
+                        "if(d){"
+                        "var c=d.querySelector('#close-button, ytcp-icon-button#close-button, button[aria-label*=\\'Đóng\\'], button[aria-label*=\\'Close\\']');"
+                        "if(c){c.click();}"
+                        "d.style.display='none'; d.setAttribute('aria-hidden','true');"
+                        "}"
+                        "document.querySelectorAll('ytcp-uploads-dialog').forEach(x=>x.remove());"
+                        "document.querySelectorAll('.tp-yt-iron-overlay-backdrop').forEach(b=>{b.style.display='none';});"
+                        "document.querySelectorAll('.tp-yt-iron-overlay-backdrop').forEach(b=>b.remove());"
+                        "}catch(e){}"
+                    )
+                    _dbg("Ddlg2j", "uploads js-close/remove applied", {})
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Generic tp-yt-paper-dialog (cookie/confirm): bấm nút đóng nếu có, hoặc ESC
+        try:
+            has_tp = bool(driver.execute_script("try{return !!document.querySelector('tp-yt-paper-dialog');}catch(e){return false;}"))
+            if has_tp:
+                _dbg("Ddlg3", "tp dialog present", {})
+                # Runtime evidence: các bước find/click có thể stall ~20s.
+                # Với tp-yt-paper-dialog (cookie/confirm), ưu tiên remove/hide thẳng bằng JS để không chặn click.
+                try:
+                    _dbg("Ddlg6", "tp dialog force hide/remove (js-fast)", {})
+                except Exception:
+                    pass
+                try:
+                    driver.execute_script(
+                        "try{"
+                        "document.querySelectorAll('tp-yt-paper-dialog').forEach(d=>{d.style.display='none'; d.setAttribute('aria-hidden','true');});"
+                        "document.querySelectorAll('.tp-yt-iron-overlay-backdrop').forEach(b=>{b.style.display='none';});"
+                        "document.querySelectorAll('tp-yt-paper-dialog').forEach(d=>d.remove());"
+                        "document.querySelectorAll('.tp-yt-iron-overlay-backdrop').forEach(b=>b.remove());"
+                        "}catch(e){}"
+                    )
+                except Exception:
+                    pass
+                # chờ dialog biến mất (timeout ngắn để tránh bị treo driver)
+                try:
+                    _dbg("Ddlg3w", "wait tp dialog gone (begin)", {})
+                except Exception:
+                    pass
+                try:
+                    # Quan trọng: không dùng find_elements ở đây vì implicit_wait có thể kéo dài thành ~10s.
+                    # Dùng JS-probe + tắt implicit trong lúc wait.
+                    try:
+                        driver.implicitly_wait(0)
+                    except Exception:
+                        pass
+                    try:
+                        WebDriverWait(driver, 2).until(
+                            lambda d: not bool(
+                                d.execute_script(
+                                    "try{return !!document.querySelector('tp-yt-paper-dialog');}catch(e){return false;}"
+                                )
+                            )
+                        )
+                    finally:
+                        try:
+                            driver.implicitly_wait(10)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                try:
+                    _dbg("Ddlg3w", "wait tp dialog gone (end)", {})
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Guard: không để stuck quá lâu ở bước dismiss
+        _dbg("Ddlg9", "dismiss dialogs exit", {"ms": int((time.time() - t0) * 1000)})
+    except Exception:
+        pass
 
 
 def upload_video(driver, file_path, video_title="tool", made_for_kids=False, visibility="unlisted", log_callback=None, on_link_available=None):
@@ -968,28 +1349,202 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
     wait = WebDriverWait(driver, 60)
     file_path_abs = os.path.abspath(file_path)
 
+    _dbg("S0", "upload_video enter", {"file": os.path.basename(file_path_abs), "visibility": visibility, "hasTitle": bool(video_title and str(video_title).strip()), "madeForKids": bool(made_for_kids)})
     try:
         # Mở YouTube Studio
         _log(log_callback, "Đang mở YouTube Studio...")
-        driver.get(YOUTUBE_STUDIO_URL)
-        time.sleep(3)
-
-        # Chờ có thể đã đăng nhập (hoặc đang ở trang login)
-        # Tìm nút "Create" / "Upload" để mở form upload
+        # Nếu đang ở sẵn Studio thì không reload để tiết kiệm thời gian
         try:
-            # Cách 1: Link/button "Upload videos" hoặc "Create"
-            upload_btn = wait.until(EC.element_to_be_clickable((
-                By.CSS_SELECTOR,
-                "ytcp-button#upload-icon, [aria-label*='Upload'], [aria-label*='upload'], "
-                "tp-yt-paper-button#upload-icon, #upload-icon"
-            )))
-            upload_btn.click()
-            _log(log_callback, "Đã mở form upload.")
-        except TimeoutException:
-            # Cách 2: Thử đi thẳng tới upload (một số phiên bản dùng path)
-            driver.get("https://studio.youtube.com/channel/upload")
-            _log(log_callback, "Đang chuyển tới trang upload...")
-        time.sleep(2)
+            if not (driver.current_url or "").startswith(YOUTUBE_STUDIO_URL):
+                driver.get(YOUTUBE_STUDIO_URL)
+        except Exception:
+            driver.get(YOUTUBE_STUDIO_URL)
+        # Chờ UI Studio sẵn sàng (upload button hoặc điều hướng upload page)
+        t_studio = time.time()
+        try:
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((
+                    By.CSS_SELECTOR,
+                    "ytcp-button#upload-icon, [aria-label*='Upload'], [aria-label*='upload'], tp-yt-paper-button#upload-icon, #upload-icon"
+                ))
+            )
+        except Exception:
+            pass
+        _dbg("S1", "studio ready waited", {"ms": int((time.time() - t_studio) * 1000), "url": (driver.current_url or "")[:120]})
+
+        # Fast path: nếu đã ở Studio và nút Upload dùng được thì bấm luôn để ra input[type=file]
+        # (giảm thời gian chờ/dọn dialog không cần thiết).
+        fast_file_input = False
+        try:
+            t_fast = time.time()
+            _dbg("Q0", "fast-path try open upload", {"url": (driver.current_url or "")[:160]})
+            driver.execute_script(
+                "try{"
+                "var btn=document.querySelector('#upload-icon');"
+                "if(btn){btn.scrollIntoView({block:'center'}); btn.click(); return true;}"
+                "return false;"
+                "}catch(e){return false;}"
+            )
+            try:
+                try:
+                    driver.implicitly_wait(0)
+                except Exception:
+                    pass
+                WebDriverWait(driver, 2).until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']")))
+                _dbg("Q1", "fast-path got file input", {"ms": int((time.time() - t_fast) * 1000)})
+                fast_file_input = True
+            except Exception:
+                _dbg("Q1", "fast-path no file input", {"ms": int((time.time() - t_fast) * 1000)})
+            finally:
+                try:
+                    driver.implicitly_wait(10)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Nếu fast-path đã có file input thì đi thẳng tới bước chọn file, không dọn dialog / không điều hướng nữa.
+        if not fast_file_input:
+            # Nếu đang còn dialog của lần upload trước (uploads/prechecks), ưu tiên dọn + refresh rồi thử fast-path lại.
+            try:
+                blockers = driver.execute_script(
+                    "try{return {"
+                    "uploadsDialog: !!document.querySelector('ytcp-uploads-dialog'),"
+                    "prechecksDialog: !!document.querySelector('ytcp-prechecks-warning-dialog'),"
+                    "tpDialog: !!document.querySelector('tp-yt-paper-dialog')"
+                    "};}catch(e){return {err:String(e).slice(0,120)};}"
+                ) or {}
+            except Exception:
+                blockers = {}
+            if blockers.get("uploadsDialog") or blockers.get("prechecksDialog") or blockers.get("tpDialog"):
+                try:
+                    _dbg("Q2", "fast-path blocked; dismiss+refresh", blockers)
+                except Exception:
+                    pass
+                _dismiss_blocking_dialogs(driver, log_callback=log_callback)
+                try:
+                    driver.refresh()
+                except Exception:
+                    try:
+                        driver.get(YOUTUBE_STUDIO_URL)
+                    except Exception:
+                        pass
+                # thử lại click upload-icon sau refresh
+                try:
+                    t_retry = time.time()
+                    driver.execute_script(
+                        "try{var btn=document.querySelector('#upload-icon');"
+                        "if(btn){btn.scrollIntoView({block:'center'}); btn.click();}}catch(e){}"
+                    )
+                    WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']")))
+                    _dbg("Q3", "retry after refresh got file input", {"ms": int((time.time() - t_retry) * 1000)})
+                    fast_file_input = True
+                except Exception:
+                    _dbg("Q3", "retry after refresh no file input", {"ms": int((time.time() - t_retry) * 1000)})
+
+        if not fast_file_input:
+            # Dọn dialog/overlay còn sót lại từ lần trước để tránh intercept/chờ vô ích
+            # JS probe để tránh find_elements bị stall (runtime evidence ~20s).
+            try:
+                d0 = driver.execute_script(
+                    "try{return {"
+                    "uploadsDialog: !!document.querySelector('ytcp-uploads-dialog'),"
+                    "prechecksDialog: !!document.querySelector('ytcp-prechecks-warning-dialog'),"
+                    "tpDialog: !!document.querySelector('tp-yt-paper-dialog')"
+                    "};}catch(e){return {err:String(e).slice(0,120)};}"
+                )
+                _dbg("D0", "before dismiss dialogs", d0 or {})
+            except Exception:
+                pass
+            _dismiss_blocking_dialogs(driver, log_callback=log_callback)
+            try:
+                d1 = driver.execute_script(
+                    "try{return {"
+                    "uploadsDialog: !!document.querySelector('ytcp-uploads-dialog'),"
+                    "prechecksDialog: !!document.querySelector('ytcp-prechecks-warning-dialog'),"
+                    "tpDialog: !!document.querySelector('tp-yt-paper-dialog')"
+                    "};}catch(e){return {err:String(e).slice(0,120)};}"
+                )
+                _dbg("D1", "after dismiss dialogs", d1 or {})
+            except Exception:
+                pass
+
+        if fast_file_input:
+            # Đã có input file từ fast-path -> đi thẳng chọn file (không điều hướng / không fallback).
+            t_filewait = time.time()
+            _dbg("C2", "after goto upload (fast-path)", {"url": (driver.current_url or "")[:200]})
+            _dbg("S2", "file input wait (fast-path)", {"ms": int((time.time() - t_filewait) * 1000), "url": (driver.current_url or "")[:120]})
+        else:
+            # Bỏ hẳn driver.get(/channel/upload) theo yêu cầu.
+            # Chiến lược: click Upload -> nếu fail thì dismiss + refresh -> click Upload lại.
+            t_filewait = time.time()
+            _dbg("C2", "open upload (click-only)", {"url": (driver.current_url or "")[:200]})
+            got_input = False
+            for attempt in (1, 2):
+                try:
+                    u0 = driver.execute_script(
+                        "try{return {"
+                        "url:(location&&location.href)?location.href.slice(0,160):'',"
+                        "uploadsDialog: !!document.querySelector('ytcp-uploads-dialog'),"
+                        "prechecksDialog: !!document.querySelector('ytcp-prechecks-warning-dialog'),"
+                        "tpDialog: !!document.querySelector('tp-yt-paper-dialog')"
+                        "};}catch(e){return {err:String(e).slice(0,120)};}"
+                    )
+                    _dbg("Ux0", f"upload click attempt {attempt}", u0 or {"url": (driver.current_url or "")[:160]})
+                except Exception:
+                    pass
+
+                if attempt == 2:
+                    _dismiss_blocking_dialogs(driver, log_callback=log_callback)
+                    try:
+                        driver.refresh()
+                    except Exception:
+                        pass
+
+                try:
+                    upload_btn = wait.until(EC.presence_of_element_located((
+                        By.CSS_SELECTOR,
+                        "ytcp-button#upload-icon, [aria-label*='Upload'], [aria-label*='upload'], "
+                        "tp-yt-paper-button#upload-icon, #upload-icon"
+                    )))
+                    try:
+                        probe = driver.execute_script(
+                            "var el=document.querySelector('#upload-icon');"
+                            "if(!el) return {has:false};"
+                            "var r=el.getBoundingClientRect();"
+                            "var x=Math.floor(r.left+r.width/2), y=Math.floor(r.top+r.height/2);"
+                            "var top=document.elementFromPoint(x,y);"
+                            "function s(e){if(!e) return null; return {tag:e.tagName,id:e.id,cls:(e.className||'').toString().slice(0,80),aria:e.getAttribute && (e.getAttribute('aria-label')||'')};}"
+                            "return {has:true,rect:{x:x,y:y,w:Math.floor(r.width),h:Math.floor(r.height)},top:s(top),self:s(el)};"
+                        )
+                        _dbg("Ux1", "upload-icon top element probe", probe or {})
+                    except Exception:
+                        pass
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", upload_btn)
+                    driver.execute_script("arguments[0].click();", upload_btn)
+
+                    try:
+                        try:
+                            driver.implicitly_wait(0)
+                        except Exception:
+                            pass
+                        WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']")))
+                        got_input = True
+                        _dbg("Ux2", "upload click led to file input", {"attempt": attempt, "ms": int((time.time() - t_filewait) * 1000)})
+                        break
+                    finally:
+                        try:
+                            driver.implicitly_wait(10)
+                        except Exception:
+                            pass
+                except Exception:
+                    continue
+
+            if not got_input:
+                _dbg("Ux2", "failed to obtain file input", {"ms": int((time.time() - t_filewait) * 1000)})
+                raise TimeoutException("Không mở được form upload (không thấy input[type=file]).")
+
+            _dbg("S2", "file input wait", {"ms": int((time.time() - t_filewait) * 1000), "url": (driver.current_url or "")[:120]})
 
         # Chọn file: input[type="file"]
         file_input = wait.until(EC.presence_of_element_located((
@@ -997,7 +1552,21 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
         )))
         file_input.send_keys(file_path_abs)
         _log(log_callback, "Đã chọn file video, đang chờ xử lý...")
-        time.sleep(3)
+        # Chờ các control chính xuất hiện (ô tiêu đề hoặc radio kids) thay vì sleep cứng
+        t_controls = time.time()
+        try:
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((
+                    By.CSS_SELECTOR,
+                    "#title-textarea div#textbox[contenteditable='true'], "
+                    "ytcp-social-suggestions-textbox#title-textarea div#textbox, "
+                    "tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_MFK'], "
+                    "tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_NOT_MFK']"
+                ))
+            )
+        except Exception:
+            time.sleep(2)
+        _dbg("S3", "post-file controls ready", {"ms": int((time.time() - t_controls) * 1000)})
 
         # Tiêu đề: có nhập trong cấu hình thì điền; không nhập thì bỏ qua, chạy luôn bước Có/Không trẻ em (radio đã có sẵn)
         # YouTube Studio dùng div contenteditable cho ô tiêu đề, không phải input
@@ -1025,8 +1594,7 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
         else:
             _log(log_callback, "Không điền tiêu đề (để trống), chạy luôn phần Có/Không trẻ em.")
 
-        # Bước 2: Có / Không - Nội dung dành cho trẻ em (chờ chậm, xác định rõ đã pick Yes/No rồi mới chọn)
-        time.sleep(3)
+        # Bước 2: Có / Không - Nội dung dành cho trẻ em
         want_yes = bool(made_for_kids)
         try:
             # #region agent log
@@ -1171,9 +1739,20 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
                 )
             except Exception:
                 pass
-            WebDriverWait(driver, 3).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#privacy-radios"))
-            )
+            # Tránh implicit_wait=10s làm check này bị kéo dài
+            try:
+                driver.implicitly_wait(0)
+            except Exception:
+                pass
+            try:
+                WebDriverWait(driver, 3).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "#privacy-radios"))
+                )
+            finally:
+                try:
+                    driver.implicitly_wait(10)
+                except Exception:
+                    pass
             # #region agent log
             try:
                 el = driver.find_element(By.CSS_SELECTOR, "#privacy-radios")
@@ -1345,7 +1924,9 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
         time.sleep(1)
 
         # Thử lấy link ngay sau khi chọn visibility (trước khi bấm Lưu) — để log + Excel trước, rồi mới bấm Lưu/Xuất bản
+        t_early = time.time()
         early_url = _try_get_video_link_from_page(driver)
+        _dbg("L1", "early link probe", {"ms": int((time.time() - t_early) * 1000), "hasUrl": bool(early_url), "url": (early_url or "")[:80]})
         if early_url:
             result["url"] = early_url
             result["success"] = True
@@ -1388,7 +1969,28 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
         except Exception:
             pass
 
-        time.sleep(5)
+        # Sau Done, thay vì sleep cứng: thử lấy link vài lần (vì YouTube có thể render link nhanh/chậm tuỳ video)
+        t_poll = time.time()
+        for _ in range(10):
+            if result.get("url"):
+                break
+            try:
+                url_probe = _try_get_video_link_from_page(driver)
+                if url_probe:
+                    result["url"] = url_probe
+                    result["success"] = True
+                    _log(log_callback, f"Link video: {result['url']}")
+                    if on_link_available and not result.get("excel_done"):
+                        try:
+                            on_link_available(url_probe)
+                        except Exception:
+                            pass
+                        result["excel_done"] = True
+                    break
+            except Exception:
+                pass
+            time.sleep(1)
+        _dbg("L2", "post-done link poll", {"ms": int((time.time() - t_poll) * 1000), "hasUrl": bool(result.get("url"))})
 
         # Lấy link video nếu chưa có (sau khi bấm Done)
         if not result.get("url"):
@@ -1417,6 +2019,7 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
         result["success"] = False
         result["error"] = str(e)
         _log(log_callback, f"Lỗi upload: {e}")
+        _dbg("S9", "upload_video exception", {"err": str(e)[:200]})
 
     return result
 
