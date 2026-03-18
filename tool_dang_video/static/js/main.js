@@ -5,6 +5,61 @@ let selectedFolderPath = null;
 // Bộ nhớ tạm cho Made for kids — tránh nhầm khi gửi request (ưu tiên giá trị user vừa chọn)
 const MADE_FOR_KIDS_STORAGE_KEY = 'made_for_kids_choice';
 
+// Favicon blink when error happens
+let _favBlinkTimer = null;
+let _favBlinkStopTimer = null;
+let _favBlinkOn = false;
+let _lastFailCount = 0;
+let _lastErrorSig = '';
+let _lastWasRunning = false;
+let _lastProgress = 0;
+
+function _faviconSvgDataUrl(dotColorHex) {
+    const dot = dotColorHex
+        ? ("<circle cx='52' cy='12' r='8' fill='" + dotColorHex + "' stroke='white' stroke-width='3'/>")
+        : "";
+    const svg =
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>" +
+        "<rect width='64' height='64' rx='14' fill='%23111827'/>" +
+        "<path d='M25 21h16a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6H25a6 6 0 0 1-6-6V27a6 6 0 0 1 6-6z' fill='%23ef4444'/>" +
+        "<path d='M29 27l12 6-12 6V27z' fill='white'/>" +
+        dot +
+        "</svg>";
+    return "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
+function _setFaviconDotColor(dotColorHexOrEmpty) {
+    const el = document.getElementById('appFavicon') || document.querySelector('link[rel~="icon"]');
+    if (!el) return;
+    el.href = _faviconSvgDataUrl(dotColorHexOrEmpty || "");
+}
+
+function _triggerFaviconBlink(dotColorHex, durationMs = 8000) {
+    try {
+        if (_favBlinkStopTimer) clearTimeout(_favBlinkStopTimer);
+        _favBlinkStopTimer = setTimeout(() => {
+            if (_favBlinkTimer) clearInterval(_favBlinkTimer);
+            _favBlinkTimer = null;
+            _favBlinkOn = false;
+            _setFaviconDotColor("");
+        }, durationMs);
+
+        if (_favBlinkTimer) return; // already blinking
+        _favBlinkTimer = setInterval(() => {
+            _favBlinkOn = !_favBlinkOn;
+            _setFaviconDotColor(_favBlinkOn ? dotColorHex : "");
+        }, 500);
+    } catch (e) {}
+}
+
+function triggerFaviconErrorBlink(durationMs = 8000) {
+    _triggerFaviconBlink('%23f59e0b', durationMs); // amber
+}
+
+function triggerFaviconSuccessBlink(durationMs = 6000) {
+    _triggerFaviconBlink('%2322c55e', durationMs); // green
+}
+
 function syncMadeForKidsChoice() {
     const checked = document.querySelector('input[name="made_for_kids"]:checked');
     const value = (checked && checked.value) ? checked.value : 'no';
@@ -254,6 +309,37 @@ function updateStatus(status) {
     // Update counts
     document.getElementById('successCount').textContent = status.success_count || 0;
     document.getElementById('failCount').textContent = status.fail_count || 0;
+
+    // Blink favicon when completed / new error appears
+    try {
+        const isNowRunning = !!status.is_running;
+
+        const failCount = Number(status.fail_count || 0);
+        let hasNewError = failCount > _lastFailCount;
+        _lastFailCount = failCount;
+
+        // Also detect new ❌ log line (works even if fail_count doesn't change)
+        const logs = Array.isArray(status.logs) ? status.logs : [];
+        const lastMsg = logs.length ? String(logs[logs.length - 1].message || '') : '';
+        const errSig = (lastMsg.includes('❌') || lastMsg.includes('Lỗi')) ? (String(logs[logs.length - 1].timestamp || '') + '|' + lastMsg.slice(0, 120)) : '';
+        if (errSig && errSig !== _lastErrorSig) {
+            _lastErrorSig = errSig;
+            hasNewError = true;
+        }
+
+        if (hasNewError) triggerFaviconErrorBlink(8000);
+
+        // Completed: running -> not running AND progress >= 100 (or last log says done)
+        try {
+            const progressNow = Number(status.progress || 0);
+            const doneByProgress = (_lastWasRunning && !isNowRunning && progressNow >= 100);
+            const doneByLog = (_lastWasRunning && !isNowRunning && (lastMsg.includes('Hoàn thành upload') || lastMsg.includes('Hoàn thành Upload')));
+            if (doneByProgress || doneByLog) triggerFaviconSuccessBlink(6000);
+            _lastProgress = progressNow;
+        } catch (e2) {}
+
+        _lastWasRunning = isNowRunning;
+    } catch (e) {}
     
     // Update progress
     const progress = status.progress || 0;

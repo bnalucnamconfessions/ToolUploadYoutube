@@ -72,6 +72,13 @@ def _log(log_callback, message):
 # #region agent log (debug-mode NDJSON)
 def _dbg(hypothesis_id: str, message: str, data=None, run_id: str = "speed_profile"):
     """Ghi NDJSON debug (không ghi dữ liệu nhạy cảm)."""
+    # Mặc định KHÔNG ghi file debug-*.log (để chạy .exe trên máy khác không sinh log).
+    # Bật lại bằng env: YTB_DEBUG_NDJSON=1
+    try:
+        if str(os.environ.get("YTB_DEBUG_NDJSON", "")).strip() not in ("1", "true", "True", "YES", "yes", "on", "ON"):
+            return
+    except Exception:
+        return
     try:
         payload = {
             "sessionId": "57c0c7",
@@ -1330,6 +1337,97 @@ def _dismiss_blocking_dialogs(driver, log_callback=None):
         pass
 
 
+def _handle_tou_interstitial(driver, log_callback=None, max_wait_s: float = 15.0) -> bool:
+    """
+    Thoát trang điều khoản/consent của YouTube Studio nếu bị redirect tới /tou/interstitial.
+    Trả về True nếu đã xử lý (có can thiệp/click) hoặc đã thoát khỏi interstitial; False nếu không thấy.
+    """
+    try:
+        t0 = time.time()
+        acted = False
+        while (time.time() - t0) < max_wait_s:
+            try:
+                url = (driver.current_url or "")
+            except Exception:
+                url = ""
+
+            try:
+                is_tou = bool(
+                    driver.execute_script(
+                        "try{"
+                        "var u=(location&&location.href)?String(location.href):'';"
+                        "if(u.includes('/tou/')||u.includes('interstitial')) return true;"
+                        "// Một số trang consent không hiện rõ URL, fallback theo button text"
+                        "var body=(document.body&&document.body.innerText)?document.body.innerText:'';"
+                        "return body.includes('Điều khoản')||body.includes('Terms')||body.includes('consent');"
+                        "}catch(e){return false;}"
+                    )
+                )
+            except Exception:
+                is_tou = ("/tou/" in url) or ("interstitial" in url)
+
+            if not is_tou:
+                if acted:
+                    _dbg("TOU1", "tou interstitial resolved", {"url": (url or "")[:160]})
+                return acted
+
+            # đang ở interstitial
+            if not acted:
+                _dbg("TOU0", "tou interstitial detected", {"url": (url or "")[:160]})
+                _log(log_callback, "⚠️ YouTube yêu cầu xác nhận điều khoản/consent (tou interstitial) — đang tự xử lý...")
+            acted = True
+
+            # JS-click các nút đồng ý/tiếp tục phổ biến
+            try:
+                clicked = bool(
+                    driver.execute_script(
+                        "try{"
+                        "var texts=["
+                        "'Tôi đồng ý','Tôi chấp nhận','Đồng ý','Chấp nhận','Tiếp tục','Tiếp tục','OK','Đóng',"
+                        "'I agree','I accept','Accept','Agree','Continue','Next','Got it'"
+                        "];"
+                        "var btns=[...document.querySelectorAll('button, ytcp-button, tp-yt-paper-button')];"
+                        "function norm(s){return (s||'').toString().replace(/\\s+/g,' ').trim().toLowerCase();}"
+                        "for(var b of btns){"
+                        "  var t=norm(b.getAttribute&&b.getAttribute('aria-label'))||norm(b.innerText);"
+                        "  for(var x of texts){"
+                        "    var nx=norm(x);"
+                        "    if(t && (t===nx || t.includes(nx))){"
+                        "      try{b.scrollIntoView({block:'center'});}catch(e){}"
+                        "      try{b.click();}catch(e){try{(b.querySelector('button')||b).click();}catch(e2){}}"
+                        "      return true;"
+                        "    }"
+                        "  }"
+                        "}"
+                        "return false;"
+                        "}catch(e){return false;}"
+                    )
+                )
+            except Exception:
+                clicked = False
+
+            _dbg("TOU2", "tou interstitial click attempt", {"clicked": bool(clicked), "url": (url or "")[:160]})
+
+            # sau click, chờ redirect một chút; nếu không có click được thì cũng chờ ngắn rồi vòng lại
+            time.sleep(1.0)
+
+            # Nếu vẫn ở interstitial, thử load lại studio URL (không dùng /channel/upload theo yêu cầu)
+            try:
+                if (driver.current_url or "").find("/tou/") != -1:
+                    driver.get(YOUTUBE_STUDIO_URL)
+            except Exception:
+                pass
+
+        # hết budget mà vẫn ở interstitial
+        try:
+            _dbg("TOU9", "tou interstitial not resolved", {"url": (driver.current_url or "")[:160]})
+        except Exception:
+            pass
+        return acted
+    except Exception:
+        return False
+
+
 def upload_video(driver, file_path, video_title="tool", made_for_kids=False, visibility="unlisted", log_callback=None, on_link_available=None):
     """
     Upload một video lên YouTube qua YouTube Studio.
@@ -1359,6 +1457,8 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
                 driver.get(YOUTUBE_STUDIO_URL)
         except Exception:
             driver.get(YOUTUBE_STUDIO_URL)
+        # Máy khác có thể bị redirect tới /tou/interstitial -> xử lý ngay để tránh FAIL hàng loạt
+        _handle_tou_interstitial(driver, log_callback=log_callback, max_wait_s=15.0)
         # Chờ UI Studio sẵn sàng (upload button hoặc điều hướng upload page)
         t_studio = time.time()
         try:
@@ -1429,6 +1529,7 @@ def upload_video(driver, file_path, video_title="tool", made_for_kids=False, vis
                         driver.get(YOUTUBE_STUDIO_URL)
                     except Exception:
                         pass
+                _handle_tou_interstitial(driver, log_callback=log_callback, max_wait_s=10.0)
                 # thử lại click upload-icon sau refresh
                 try:
                     t_retry = time.time()
